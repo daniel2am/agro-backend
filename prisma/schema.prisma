@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Usuario {
+  id                String   @id @default(uuid())
+  nome              String
+  email             String   @unique
+  senha             String
+  fotoUrl           String?
+  status            String   @default("ativo")
+  tipo              String   @default("usuario")
+  criadoEm          DateTime @default(now())
+  atualizadoEm      DateTime @updatedAt
+  ultimoLogin       DateTime?
+  googleId          String?  @unique
+  appleId           String?  @unique
+  resetToken        String?  @db.VarChar(255)
+  resetTokenExpires DateTime?
+  termosAceitosEm   DateTime?
+  fazendas          FazendaUsuario[]
+  acessos           LogAcesso[]
+}
+
+model Fazenda {
+  id            String   @id @default(uuid())
+  nome          String
+  cidade        String
+  estado        String
+  cadastroIncra String   @unique
+  car           String?
+  titular       String?
+  areaTotal     Float?
+  status        String   @default("ativa")
+  criadoEm      DateTime @default(now())
+  usuarios      FazendaUsuario[]
+  invernadas    Invernada[]
+  lavouras      Lavoura[]
+}
+
+model FazendaUsuario {
+  id         String   @id @default(uuid())
+  usuarioId  String
+  fazendaId  String
+  papel      String
+  ativo      Boolean  @default(true)
+  criadoEm   DateTime @default(now())
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id])
+  fazenda    Fazenda  @relation(fields: [fazendaId], references: [id])
+}
+
+model LogAcesso {
+  id        String   @id @default(uuid())
+  usuarioId String
+  data      DateTime @default(now())
+  acao      String
+  ip        String?
+  userAgent String?
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id])
+}
+
+// INVERNADA, LAVOURA etc. podem ser detalhados na sequência para manter clean
+model Invernada {
+  id         String   @id @default(uuid())
+  nome       String
+  areaHa     Float
+  status     String   @default("disponivel")
+  fazendaId  String
+  criadoEm   DateTime @default(now())
+  fazenda    Fazenda  @relation(fields: [fazendaId], references: [id])
+  // ... outros campos depois
+}
+
+model Lavoura {
+  id          String   @id @default(uuid())
+  nome        String
+  cultura     String
+  areaHa      Float
+  dataPlantio DateTime
+  status      String   @default("ativo")
+  fazendaId   String
+  criadoEm    DateTime @default(now())
+  fazenda     Fazenda  @relation(fields: [fazendaId], references: [id])
+  // ... outros campos depois
+}
