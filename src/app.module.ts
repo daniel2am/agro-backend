@@ -7,6 +7,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
 import { join } from 'path';
+import { FazendaModule } from './modules/fazenda/fazenda.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { join } from 'path';
     }),
     // ...existing code...
     UsuarioModule,
+    FazendaModule,
     AuthModule,
     JwtModule.register({}),
     MailerModule.forRootAsync({
