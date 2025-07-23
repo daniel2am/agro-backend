@@ -1,15 +1,14 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { setupSwagger } from './swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Configura CORS se necessário (padrão: aberto para dev, ajustar depois se quiser)
+  // Habilita CORS (ajuste depois se quiser restringir)
   app.enableCors();
 
-  // Documentação Swagger SEM IF (sempre ativa, inclusive em produção)
+  // Swagger SEM IF: sempre ativo!
   const config = new DocumentBuilder()
     .setTitle('AgroTotal API')
     .setDescription('Documentação da API AgroTotal')
@@ -17,15 +16,9 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
+  SwaggerModule.setup('api/docs', app, document); // <-- Aqui é '/api/docs'!
 
-  async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  // ... outras configs ...
-  
-  setupSwagger(app);
-  } 
-  // Inicia aplicação
-  await app.listen(process.env.PORT || 3000);
+  // Sobe a aplicação na porta do ambiente ou 3333 local
+  await app.listen(process.env.PORT || 3333);
 }
 bootstrap();
