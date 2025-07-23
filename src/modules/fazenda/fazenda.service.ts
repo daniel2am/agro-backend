@@ -1,50 +1,39 @@
-import { Injectable, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
-import { CreateFazendaDto, UpdateFazendaDto, TitularFazendaDto } from './fazenda.dto';
+import { CreateFazendaDto, UpdateFazendaDto } from './fazenda.dto';
 import { exportToCSV, exportToPDF } from '../../utils/export.util';
-import { parseCcirPdfUtil } from '../../utils/pdf-ccir.util';
+import { parseCcirPdf } from '../../utils/pdf-ccir.util';
 
 @Injectable()
 export class FazendaService {
   constructor(private prisma: PrismaService) {}
 
   async create(data: CreateFazendaDto, usuarioId: string) {
-  const { titulares, ...fazendaData } = data;
-  const fazenda = await this.prisma.fazenda.create({
-    data: {
-      ...fazendaData,
-      usuarios: {
-        create: {
-          usuarioId,
-          papel: 'proprietario',
+    const { titulares, ...fazendaData } = data;
+    const fazenda = await this.prisma.fazenda.create({
+      data: {
+        ...fazendaData,
+        usuarios: {
+          create: { usuarioId, papel: 'proprietario' },
+        },
+        titulares: {
+          create: titulares || [],
         },
       },
-      titulares: {
-        create: titulares?.map(t => ({
-          nome: t.nome,
-          cpfCnpj: t.cpfCnpj,
-          nacionalidade: t.nacionalidade,
-          condicao: t.condicao,
-          percentualDetencao: t.percentualDetencao,
-        })) || [],
-      },
-    },
-    include: {
-      titulares: true,
-    },
-  });
-  return fazenda;
-}
+      include: { titulares: true },
+    });
+    return fazenda;
+  }
 
+  async createFromCcir(buffer: Buffer, usuarioId: string) {
+    const data = await parseCcirPdf(buffer);
+    return this.create(data, usuarioId);
+  }
 
   async findAll(usuarioId: string, params: any = {}) {
     const { take = 20, skip = 0, search } = params;
     const where: any = {
-      usuarios: {
-        some: {
-          usuarioId,
-        },
-      },
+      usuarios: { some: { usuarioId } },
     };
     if (search) {
       where.OR = [
@@ -68,10 +57,7 @@ export class FazendaService {
 
   async findOne(id: string, usuarioId: string) {
     const fazenda = await this.prisma.fazenda.findFirst({
-      where: {
-        id,
-        usuarios: { some: { usuarioId } },
-      },
+      where: { id, usuarios: { some: { usuarioId } } },
       include: { titulares: true },
     });
     if (!fazenda) throw new NotFoundException('Fazenda não encontrada ou acesso negado');
@@ -83,26 +69,17 @@ export class FazendaService {
       where: { id, usuarios: { some: { usuarioId } } },
     });
     if (!exists) throw new ForbiddenException('Acesso negado');
-    const { titulares, ...rest } = data;
-    // Atualização simplificada (exclui e recria titulares para manter atomicidade)
-    if (titulares) {
+
+    // Atualiza titulares (remove todos e adiciona novamente)
+    if (data.titulares) {
       await this.prisma.titularFazenda.deleteMany({ where: { fazendaId: id } });
     }
+
     return this.prisma.fazenda.update({
       where: { id },
       data: {
-        ...rest,
-        ...(titulares && {
-          titulares: {
-            create: titulares.map(t => ({
-              nome: t.nome,
-              cpfCnpj: t.cpfCnpj,
-              nacionalidade: t.nacionalidade,
-              condicao: t.condicao,
-              percentualDetencao: t.percentualDetencao,
-            })),
-          },
-        }),
+        ...data,
+        ...(data.titulares && { titulares: { create: data.titulares } }),
       },
       include: { titulares: true },
     });
@@ -131,10 +108,5 @@ export class FazendaService {
       include: { titulares: true },
     });
     return exportToPDF(fazendas, 'Fazendas');
-  }
-
-  async parseCcirPdf(file: Express.Multer.File) {
-    if (!file?.buffer) throw new BadRequestException('Arquivo não recebido');
-    return parseCcirPdfUtil(file.buffer);
   }
 }

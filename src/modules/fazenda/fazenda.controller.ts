@@ -2,7 +2,7 @@ import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, UseGuard
 import { FazendaService } from './fazenda.service';
 import { CreateFazendaDto, UpdateFazendaDto } from './fazenda.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { ApiBearerAuth, ApiTags, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags, ApiOperation, ApiConsumes } from '@nestjs/swagger';
 import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 
@@ -19,13 +19,12 @@ export class FazendaController {
     return this.fazendaService.create(dto, req.user.id);
   }
 
-  @Post('ccir-upload')
-  @ApiOperation({ summary: 'Extrair dados do PDF CCIR e sugerir cadastro' })
+  @Post('upload-ccir')
+  @ApiOperation({ summary: 'Cadastrar Fazenda via upload do CCIR em PDF' })
   @ApiConsumes('multipart/form-data')
-  @ApiBody({ schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' }}}})
   @UseInterceptors(FileInterceptor('file'))
-  async uploadCcir(@UploadedFile() file: Express.Multer.File) {
-    return this.fazendaService.parseCcirPdf(file);
+  uploadCcir(@UploadedFile() file: Express.Multer.File, @Req() req) {
+    return this.fazendaService.createFromCcir(file.buffer, req.user.id);
   }
 
   @Get()

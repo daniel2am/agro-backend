@@ -1,43 +1,36 @@
-import pdfParse from 'pdf-parse';
+import * as pdfParse from 'pdf-parse';
 
-// Exemplo de parser: ajuste as regex conforme necessidade para pegar cada campo
-export async function parseCcirPdfUtil(buffer: Buffer) {
+export async function parseCcirPdf(buffer: Buffer) {
   const data = await pdfParse(buffer);
-  const text = data.text.replace(/\n/g, ' ');
+  const text = data.text;
 
-  // Exemplo (ajuste para o layout real do CCIR):
-  const codigoImovel = text.match(/Código do Imóvel Rural:?\s*(\d+)/i)?.[1] ?? '';
-  const denominacao = text.match(/Denominação do Imóvel:?\s*(.*?)(?:Área|Município|UF|$)/i)?.[1]?.trim() ?? '';
-  const areaTotal = parseFloat(text.match(/Área Total \(ha\):?\s*([\d.,]+)/i)?.[1]?.replace(',', '.') ?? '0');
-  const municipio = text.match(/Município Sede do Imóvel Rural:?\s*(.*?)(?:UF|Módulo Rural|$)/i)?.[1]?.trim() ?? '';
-  const estado = text.match(/UF:?\s*([A-Z]{2})/)?.[1] ?? '';
-  const moduloRural = parseFloat(text.match(/Módulo Rural \(ha\):?\s*([\d.,]+)/i)?.[1]?.replace(',', '.') ?? '0');
-  const numeroModulos = parseFloat(text.match(/Nº de Módulos Rurais:?\s*([\d.,]+)/i)?.[1]?.replace(',', '.') ?? '0');
-  const numeroCcir = text.match(/Nº do CCIR:?\s*(\d+)/i)?.[1] ?? '';
+  // Exemplo de regex. Ajuste para seu layout real!
+  const cadastroIncra = /Código do Imóvel Rural[:\s]+(\d+)/.exec(text)?.[1]?.trim() ?? '';
+  const nome = /Denominação do Imóvel[:\s]+(.+)/.exec(text)?.[1]?.trim() ?? '';
+  const areaTotal = /Área Total[:\s]+([\d,.]+)/.exec(text)?.[1]?.replace(',', '.') ?? '';
+  const cidade = /Município Sede do Imóvel Rural[:\s]+(.+)/.exec(text)?.[1]?.trim() ?? '';
+  const estado = /UF[:\s]+([A-Z]{2})/.exec(text)?.[1]?.trim() ?? '';
 
-  // Titulares (pode ter mais de um)
+  // Titulares (ajuste conforme necessário)
   const titulares: any[] = [];
-  const titularRegex = /Nome:\s*(.*?)\s+CPF\/CNPJ:\s*([\d./-]+)\s+Nacionalidade:\s*(.*?)\s+Condição:\s*(.*?)\s+Percentual de Detenção:\s*([\d.,]+)/g;
-  let m;
-  while ((m = titularRegex.exec(text))) {
+  const titularRegex = /Nome[:\s]+(.+)\nCPF\/CNPJ[:\s]+([\d./-]+)\nNacionalidade[:\s]+(.+)\nCondição[:\s]+(.+)\nPercentual de Detenção[:\s]+([\d,.]+)/g;
+  let titularMatch;
+  while ((titularMatch = titularRegex.exec(text))) {
     titulares.push({
-      nome: m[1],
-      cpfCnpj: m[2],
-      nacionalidade: m[3],
-      condicao: m[4],
-      percentualDetencao: parseFloat(m[5].replace(',', '.')),
+      nome: titularMatch[1].trim(),
+      cpfCnpj: titularMatch[2].trim(),
+      nacionalidade: titularMatch[3].trim(),
+      condicao: titularMatch[4].trim(),
+      percentualDetencao: parseFloat(titularMatch[5].replace(',', '.')),
     });
   }
 
   return {
-    codigoImovel,
-    denominacao,
-    areaTotal,
-    municipio,
+    cadastroIncra,
+    nome,
+    cidade,
     estado,
-    moduloRural,
-    numeroModulos,
-    numeroCcir,
+    areaTotal: areaTotal ? parseFloat(areaTotal) : undefined,
     titulares,
   };
 }
