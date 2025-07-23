@@ -34,14 +34,28 @@ model Fazenda {
   estado        String
   cadastroIncra String   @unique
   car           String?
-  titular       String?
+  titular       String? // Pode remover, será por relação
   areaTotal     Float?
   status        String   @default("ativa")
   criadoEm      DateTime @default(now())
   usuarios      FazendaUsuario[]
   invernadas    Invernada[]
   lavouras      Lavoura[]
+  titulares     TitularFazenda[]  // Adicione esta linha
 }
+
+model TitularFazenda {
+  id                String   @id @default(uuid())
+  fazendaId         String
+  nome              String
+  cpfCnpj           String
+  nacionalidade     String
+  condicao          String
+  percentualDetencao Float
+  fazenda           Fazenda  @relation(fields: [fazendaId], references: [id])
+}
+
+
 
 model FazendaUsuario {
   id         String   @id @default(uuid())

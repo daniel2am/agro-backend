@@ -1,13 +1,22 @@
 import { ApiProperty } from '@nestjs/swagger';
 
+export class TitularFazendaDto {
+  @ApiProperty() nome: string;
+  @ApiProperty() cpfCnpj: string;
+  @ApiProperty({ required: false }) nacionalidade?: string;
+  @ApiProperty({ required: false }) condicao?: string;
+  @ApiProperty({ required: false }) percentualDetencao?: number;
+}
+
 export class CreateFazendaDto {
   @ApiProperty() nome: string;
   @ApiProperty() cidade: string;
   @ApiProperty() estado: string;
   @ApiProperty() cadastroIncra: string;
   @ApiProperty({ required: false }) car?: string;
-  @ApiProperty({ required: false }) titular?: string;
   @ApiProperty({ required: false }) areaTotal?: number;
+  @ApiProperty({ type: [TitularFazendaDto], required: false })
+  titulares?: TitularFazendaDto[];
 }
 
 export class UpdateFazendaDto {
@@ -16,7 +25,8 @@ export class UpdateFazendaDto {
   @ApiProperty({ required: false }) estado?: string;
   @ApiProperty({ required: false }) cadastroIncra?: string;
   @ApiProperty({ required: false }) car?: string;
-  @ApiProperty({ required: false }) titular?: string;
   @ApiProperty({ required: false }) areaTotal?: number;
   @ApiProperty({ required: false }) status?: string;
+  @ApiProperty({ type: [TitularFazendaDto], required: false })
+  titulares?: TitularFazendaDto[];
 }

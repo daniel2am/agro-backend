@@ -1,26 +1,41 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
-import { CreateFazendaDto, UpdateFazendaDto } from './fazenda.dto';
+import { CreateFazendaDto, UpdateFazendaDto, TitularFazendaDto } from './fazenda.dto';
 import { exportToCSV, exportToPDF } from '../../utils/export.util';
+import { parseCcirPdfUtil } from '../../utils/pdf-ccir.util';
 
 @Injectable()
 export class FazendaService {
   constructor(private prisma: PrismaService) {}
 
   async create(data: CreateFazendaDto, usuarioId: string) {
-    const fazenda = await this.prisma.fazenda.create({
-      data: {
-        ...data,
-        usuarios: {
-          create: {
-            usuarioId,
-            papel: 'proprietario',
-          },
+  const { titulares, ...fazendaData } = data;
+  const fazenda = await this.prisma.fazenda.create({
+    data: {
+      ...fazendaData,
+      usuarios: {
+        create: {
+          usuarioId,
+          papel: 'proprietario',
         },
       },
-    });
-    return fazenda;
-  }
+      titulares: {
+        create: titulares?.map(t => ({
+          nome: t.nome,
+          cpfCnpj: t.cpfCnpj,
+          nacionalidade: t.nacionalidade,
+          condicao: t.condicao,
+          percentualDetencao: t.percentualDetencao,
+        })) || [],
+      },
+    },
+    include: {
+      titulares: true,
+    },
+  });
+  return fazenda;
+}
+
 
   async findAll(usuarioId: string, params: any = {}) {
     const { take = 20, skip = 0, search } = params;
@@ -44,6 +59,7 @@ export class FazendaService {
         take: Number(take),
         skip: Number(skip),
         orderBy: { criadoEm: 'desc' },
+        include: { titulares: true },
       }),
       this.prisma.fazenda.count({ where }),
     ]);
@@ -56,6 +72,7 @@ export class FazendaService {
         id,
         usuarios: { some: { usuarioId } },
       },
+      include: { titulares: true },
     });
     if (!fazenda) throw new NotFoundException('Fazenda não encontrada ou acesso negado');
     return fazenda;
@@ -66,9 +83,28 @@ export class FazendaService {
       where: { id, usuarios: { some: { usuarioId } } },
     });
     if (!exists) throw new ForbiddenException('Acesso negado');
+    const { titulares, ...rest } = data;
+    // Atualização simplificada (exclui e recria titulares para manter atomicidade)
+    if (titulares) {
+      await this.prisma.titularFazenda.deleteMany({ where: { fazendaId: id } });
+    }
     return this.prisma.fazenda.update({
       where: { id },
-      data,
+      data: {
+        ...rest,
+        ...(titulares && {
+          titulares: {
+            create: titulares.map(t => ({
+              nome: t.nome,
+              cpfCnpj: t.cpfCnpj,
+              nacionalidade: t.nacionalidade,
+              condicao: t.condicao,
+              percentualDetencao: t.percentualDetencao,
+            })),
+          },
+        }),
+      },
+      include: { titulares: true },
     });
   }
 
@@ -77,12 +113,14 @@ export class FazendaService {
       where: { id, usuarios: { some: { usuarioId } } },
     });
     if (!exists) throw new ForbiddenException('Acesso negado');
+    await this.prisma.titularFazenda.deleteMany({ where: { fazendaId: id } });
     return this.prisma.fazenda.delete({ where: { id } });
   }
 
   async exportCSV(usuarioId: string) {
     const fazendas = await this.prisma.fazenda.findMany({
       where: { usuarios: { some: { usuarioId } } },
+      include: { titulares: true },
     });
     return exportToCSV(fazendas, 'fazendas');
   }
@@ -90,7 +128,13 @@ export class FazendaService {
   async exportPDF(usuarioId: string) {
     const fazendas = await this.prisma.fazenda.findMany({
       where: { usuarios: { some: { usuarioId } } },
+      include: { titulares: true },
     });
     return exportToPDF(fazendas, 'Fazendas');
+  }
+
+  async parseCcirPdf(file: Express.Multer.File) {
+    if (!file?.buffer) throw new BadRequestException('Arquivo não recebido');
+    return parseCcirPdfUtil(file.buffer);
   }
 }
