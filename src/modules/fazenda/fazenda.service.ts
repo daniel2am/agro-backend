@@ -1,112 +1,82 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../../prisma.service';
-import { CreateFazendaDto, UpdateFazendaDto } from './fazenda.dto';
-import { exportToCSV, exportToPDF } from '../../utils/export.util';
-import { parseCcirPdf } from '../../utils/pdf-ccir.util';
+import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
+import { PrismaService } from 'src/prisma.service';
+import { CreateFazendaDto } from './dto/create-fazenda.dto';
+import { UpdateFazendaDto } from './dto/update-fazenda.dto';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class FazendaService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(FazendaService.name);
+
+  constructor(private readonly prisma: PrismaService) {}
 
   async create(data: CreateFazendaDto, usuarioId: string) {
-    const { titulares, ...fazendaData } = data;
     const fazenda = await this.prisma.fazenda.create({
       data: {
-        ...fazendaData,
+        ...data,
         usuarios: {
-          create: { usuarioId, papel: 'proprietario' },
-        },
-        titulares: {
-          create: titulares || [],
+          create: [{
+            usuarioId,
+            papel: 'administrador',
+          }],
         },
       },
-      include: { titulares: true },
     });
+    this.logger.log(`Fazenda criada: ${fazenda.id}`);
     return fazenda;
-  }
-
-  async createFromCcir(buffer: Buffer, usuarioId: string) {
-    const data = await parseCcirPdf(buffer);
-    return this.create(data, usuarioId);
   }
 
   async findAll(usuarioId: string, params: any = {}) {
     const { take = 20, skip = 0, search } = params;
-    const where: any = {
-      usuarios: { some: { usuarioId } },
+
+    const where: Prisma.FazendaWhereInput = {
+      usuarios: {
+        some: { usuarioId },
+      },
+      ...(search && {
+        OR: [
+          { nome: { contains: search, mode: 'insensitive' } },
+          { cidade: { contains: search, mode: 'insensitive' } },
+        ],
+      }),
     };
-    if (search) {
-      where.OR = [
-        { nome: { contains: search, mode: 'insensitive' } },
-        { cidade: { contains: search, mode: 'insensitive' } },
-        { estado: { contains: search, mode: 'insensitive' } },
-      ];
-    }
-    const [data, total] = await Promise.all([
+
+    const [data, total] = await this.prisma.$transaction([
       this.prisma.fazenda.findMany({
         where,
         take: Number(take),
         skip: Number(skip),
-        orderBy: { criadoEm: 'desc' },
-        include: { titulares: true },
+        orderBy: { nome: 'asc' },
       }),
       this.prisma.fazenda.count({ where }),
     ]);
+
     return { data, total };
   }
 
   async findOne(id: string, usuarioId: string) {
     const fazenda = await this.prisma.fazenda.findFirst({
-      where: { id, usuarios: { some: { usuarioId } } },
-      include: { titulares: true },
+      where: {
+        id,
+        usuarios: {
+          some: { usuarioId },
+        },
+      },
     });
     if (!fazenda) throw new NotFoundException('Fazenda não encontrada ou acesso negado');
     return fazenda;
   }
 
   async update(id: string, data: UpdateFazendaDto, usuarioId: string) {
-    const exists = await this.prisma.fazenda.findFirst({
-      where: { id, usuarios: { some: { usuarioId } } },
-    });
-    if (!exists) throw new ForbiddenException('Acesso negado');
-
-    // Atualiza titulares (remove todos e adiciona novamente)
-    if (data.titulares) {
-      await this.prisma.titularFazenda.deleteMany({ where: { fazendaId: id } });
-    }
-
-    return this.prisma.fazenda.update({
-      where: { id },
-      data: {
-        ...data,
-        ...(data.titulares && { titulares: { create: data.titulares } }),
-      },
-      include: { titulares: true },
-    });
+    const check = await this.findOne(id, usuarioId);
+    if (!check) throw new ForbiddenException('Acesso negado');
+    return this.prisma.fazenda.update({ where: { id }, data });
   }
 
   async remove(id: string, usuarioId: string) {
-    const exists = await this.prisma.fazenda.findFirst({
-      where: { id, usuarios: { some: { usuarioId } } },
-    });
-    if (!exists) throw new ForbiddenException('Acesso negado');
-    await this.prisma.titularFazenda.deleteMany({ where: { fazendaId: id } });
-    return this.prisma.fazenda.delete({ where: { id } });
-  }
-
-  async exportCSV(usuarioId: string) {
-    const fazendas = await this.prisma.fazenda.findMany({
-      where: { usuarios: { some: { usuarioId } } },
-      include: { titulares: true },
-    });
-    return exportToCSV(fazendas, 'fazendas');
-  }
-
-  async exportPDF(usuarioId: string) {
-    const fazendas = await this.prisma.fazenda.findMany({
-      where: { usuarios: { some: { usuarioId } } },
-      include: { titulares: true },
-    });
-    return exportToPDF(fazendas, 'Fazendas');
+    const check = await this.findOne(id, usuarioId);
+    if (!check) throw new ForbiddenException('Acesso negado');
+    await this.prisma.fazenda.delete({ where: { id } });
+    return { message: 'Fazenda removida com sucesso' };
   }
 }

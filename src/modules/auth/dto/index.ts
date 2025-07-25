@@ -1,19 +1,4 @@
-export class CreateUserDto {
-  nome: string;
-  email: string;
-  senha: string;
-}
-
-export class LoginDto {
-  email: string;
-  senha: string;
-}
-
-export class ForgotPasswordDto {
-  email: string;
-}
-
-export class ResetPasswordDto {
-  token: string;
-  senha: string;
-}
+export { RegisterAuthDto } from './register-auth.dto';
+export { LoginAuthDto } from './login-auth.dto';
+export { ForgotPasswordDto } from './forgot-password.dto';
+export { ResetPasswordDto } from './reset-password.dto';

@@ -1,4 +1,5 @@
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import { TipoUsuario } from '@prisma/client';
 
 export class CreateUsuarioDto {
   @IsString()
@@ -7,10 +8,14 @@ export class CreateUsuarioDto {
   @IsEmail()
   email: string;
 
-  @IsString()
   @MinLength(6)
   senha: string;
 
+  @IsOptional()
   @IsString()
-  googleId?: string; // opcional, para login com Google
+  fotoUrl?: string;
+
+  @IsOptional()
+  @IsEnum(TipoUsuario)
+  tipo?: TipoUsuario;
 }

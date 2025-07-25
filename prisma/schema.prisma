@@ -7,65 +7,205 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Usuario {
-  id                String   @id @default(uuid())
-  nome              String
-  email             String   @unique
-  senha             String
-  fotoUrl           String?
-  status            String   @default("ativo")
-  tipo              String   @default("usuario")
-  criadoEm          DateTime @default(now())
-  atualizadoEm      DateTime @updatedAt
-  ultimoLogin       DateTime?
-  googleId          String?  @unique
-  appleId           String?  @unique
-  resetToken        String?  @db.VarChar(255)
-  resetTokenExpires DateTime?
-  termosAceitosEm   DateTime?
-  fazendas          FazendaUsuario[]
-  acessos           LogAcesso[]
+enum StatusFazenda {
+  ativa
+  inativa
+}
+
+enum StatusInvernada {
+  disponivel
+  ocupada
+  inativa
+}
+
+enum StatusLavoura {
+  ativo
+  inativo
+}
+
+enum TipoUsuario {
+  usuario
+  administrador
+  gestor
+}
+
+enum TipoDispositivo {
+  bastao
+  balanca
+  antena
+  outro
+}
+
+enum TipoLeituraDispositivo {
+  brinco
+  peso
+  antena
+  outro
+}
+
+enum PapelUsuarioFazenda {
+  administrador
+  gestor
+  colaborador
+}
+
+enum TipoFinanceiro {
+  receita
+  despesa
 }
 
 model Fazenda {
-  id            String   @id @default(uuid())
+  id            String        @id @default(uuid())
   nome          String
   cidade        String
   estado        String
-  cadastroIncra String   @unique
+  cadastroIncra String        @unique
   car           String?
-  titular       String? // Pode remover, será por relação
   areaTotal     Float?
-  status        String   @default("ativa")
-  criadoEm      DateTime @default(now())
-  usuarios      FazendaUsuario[]
-  invernadas    Invernada[]
-  lavouras      Lavoura[]
-  titulares     TitularFazenda[]  // Adicione esta linha
+  status        StatusFazenda @default(ativa)
+  criadoEm      DateTime      @default(now())
+
+  usuarios     FazendaUsuario[]
+  invernadas   Invernada[]
+  lavouras     Lavoura[]
+  animais      Animal[]
+  titulares    TitularFazenda[]
+  dispositivos Dispositivo[] // ✅ relação com Dispositivo
+  leituras     LeituraDispositivo[] // ✅ relação com LeituraDispositivo
+  Financeiro   Financeiro[]
 }
 
 model TitularFazenda {
-  id                String   @id @default(uuid())
-  fazendaId         String
-  nome              String
-  cpfCnpj           String
-  nacionalidade     String
-  condicao          String
+  id                 String  @id @default(uuid())
+  fazendaId          String
+  nome               String
+  cpfCnpj            String
+  nacionalidade      String
+  condicao           String
   percentualDetencao Float
-  fazenda           Fazenda  @relation(fields: [fazendaId], references: [id])
+  fazenda            Fazenda @relation(fields: [fazendaId], references: [id])
 }
 
-
-
 model FazendaUsuario {
-  id         String   @id @default(uuid())
-  usuarioId  String
-  fazendaId  String
-  papel      String
-  ativo      Boolean  @default(true)
-  criadoEm   DateTime @default(now())
-  usuario    Usuario  @relation(fields: [usuarioId], references: [id])
-  fazenda    Fazenda  @relation(fields: [fazendaId], references: [id])
+  id        String              @id @default(uuid())
+  usuarioId String
+  fazendaId String
+  papel     PapelUsuarioFazenda
+  ativo     Boolean             @default(true)
+  criadoEm  DateTime            @default(now())
+  usuario   Usuario             @relation(fields: [usuarioId], references: [id])
+  fazenda   Fazenda             @relation(fields: [fazendaId], references: [id])
+}
+
+model Animal {
+  id           String               @id @default(uuid())
+  brinco       String
+  fazendaId    String
+  invernadaId  String?
+  nome         String?
+  sexo         String?
+  raca         String?
+  nascimento   DateTime?
+  leituras     LeituraDispositivo[]
+  criadoEm     DateTime             @default(now())
+  atualizadoEm DateTime             @updatedAt
+  fazenda      Fazenda              @relation(fields: [fazendaId], references: [id])
+  invernada    Invernada?           @relation(fields: [invernadaId], references: [id])
+  Sanidade     Sanidade[]
+
+  @@unique([fazendaId, brinco])
+}
+
+model Invernada {
+  id        String               @id @default(uuid())
+  nome      String
+  areaHa    Float
+  status    StatusInvernada      @default(disponivel)
+  fazendaId String
+  criadoEm  DateTime             @default(now())
+  fazenda   Fazenda              @relation(fields: [fazendaId], references: [id])
+  animais   Animal[]
+  leituras  LeituraDispositivo[] // ✅ relação com LeituraDispositivo
+}
+
+model Lavoura {
+  id          String        @id @default(uuid())
+  nome        String
+  cultura     String
+  areaHa      Float
+  dataPlantio DateTime
+  status      StatusLavoura @default(ativo)
+  fazendaId   String
+  criadoEm    DateTime      @default(now())
+  fazenda     Fazenda       @relation(fields: [fazendaId], references: [id])
+}
+
+model MarcaModeloDispositivo {
+  id           String          @id @default(uuid())
+  fabricante   String
+  modelo       String
+  tipo         TipoDispositivo
+  protocolo    String?
+  infoExtra    String?
+  dispositivos Dispositivo[]
+}
+
+model Dispositivo {
+  id            String   @id @default(uuid())
+  nome          String
+  usuarioId     String?
+  fazendaId     String?
+  marcaModeloId String
+  numeroSerie   String?
+  ativo         Boolean  @default(true)
+  criadoEm      DateTime @default(now())
+
+  marcaModelo MarcaModeloDispositivo @relation(fields: [marcaModeloId], references: [id])
+  usuario     Usuario?               @relation(fields: [usuarioId], references: [id])
+  fazenda     Fazenda?               @relation(fields: [fazendaId], references: [id])
+  leituras    LeituraDispositivo[]
+}
+
+model LeituraDispositivo {
+  id            String                 @id @default(uuid())
+  animalId      String?
+  dispositivoId String
+  fazendaId     String
+  invernadaId   String?
+  usuarioId     String
+  tipo          TipoLeituraDispositivo
+  valor         String
+  dataLeitura   DateTime               @default(now())
+  metadados     Json?
+
+  animal      Animal?     @relation(fields: [animalId], references: [id])
+  dispositivo Dispositivo @relation(fields: [dispositivoId], references: [id])
+  fazenda     Fazenda     @relation(fields: [fazendaId], references: [id])
+  invernada   Invernada?  @relation(fields: [invernadaId], references: [id])
+  usuario     Usuario     @relation(fields: [usuarioId], references: [id])
+}
+
+model Usuario {
+  id                String      @id @default(uuid())
+  nome              String
+  email             String      @unique
+  senha             String
+  fotoUrl           String?
+  status            String      @default("ativo")
+  tipo              TipoUsuario @default(usuario)
+  criadoEm          DateTime    @default(now())
+  atualizadoEm      DateTime    @updatedAt
+  ultimoLogin       DateTime?
+  googleId          String?     @unique
+  appleId           String?     @unique
+  resetToken        String?     @db.VarChar(255)
+  resetTokenExpires DateTime?
+  termosAceitosEm   DateTime?
+
+  fazendas     FazendaUsuario[]
+  acessos      LogAcesso[]
+  dispositivos Dispositivo[]
+  leituras     LeituraDispositivo[]
 }
 
 model LogAcesso {
@@ -78,27 +218,25 @@ model LogAcesso {
   usuario   Usuario  @relation(fields: [usuarioId], references: [id])
 }
 
-// INVERNADA, LAVOURA etc. podem ser detalhados na sequência para manter clean
-model Invernada {
-  id         String   @id @default(uuid())
-  nome       String
-  areaHa     Float
-  status     String   @default("disponivel")
-  fazendaId  String
-  criadoEm   DateTime @default(now())
-  fazenda    Fazenda  @relation(fields: [fazendaId], references: [id])
-  // ... outros campos depois
+model Sanidade {
+  id          String   @id @default(uuid())
+  animalId    String
+  data        DateTime
+  tipo        String
+  observacoes String?
+  criadoEm    DateTime @default(now())
+
+  animal Animal @relation(fields: [animalId], references: [id])
 }
 
-model Lavoura {
-  id          String   @id @default(uuid())
-  nome        String
-  cultura     String
-  areaHa      Float
-  dataPlantio DateTime
-  status      String   @default("ativo")
-  fazendaId   String
-  criadoEm    DateTime @default(now())
-  fazenda     Fazenda  @relation(fields: [fazendaId], references: [id])
-  // ... outros campos depois
+model Financeiro {
+  id        String         @id @default(uuid())
+  fazendaId String
+  data      DateTime
+  descricao String
+  valor     Float
+  tipo      TipoFinanceiro
+  criadoEm  DateTime       @default(now())
+
+  fazenda Fazenda @relation(fields: [fazendaId], references: [id])
 }

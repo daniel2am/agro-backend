@@ -1,38 +1,52 @@
-import { Controller, Post, Body, Get, Req, Res, UseGuards, Query } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
+import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
-import { Request, Response } from 'express';
-import { CreateUserDto, LoginDto, ForgotPasswordDto, ResetPasswordDto } from './dto';
+import {
+  ForgotPasswordDto,
+  ResetPasswordDto,
+  LoginAuthDto,
+  RegisterAuthDto,
+} from './dto';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  // Removed duplicate googleAuth and googleAuthRedirect methods
-
   @Post('register')
-  async register(@Body() dto: CreateUserDto) {
+  async register(@Body() dto: RegisterAuthDto) {
     return this.authService.register(dto);
   }
 
   @UseGuards(LocalAuthGuard)
   @Post('login')
-  async login(@Body() dto: LoginDto, @Req() req: Request) {
+  async login(@Body() dto: LoginAuthDto, @Req() req: Request) {
     return this.authService.login(req.user);
   }
 
   @UseGuards(GoogleAuthGuard)
   @Get('google')
-  async googleAuth() {}
+  async googleAuth() {
+    // Redirecionamento para o Google - handled by Guard
+  }
 
   @UseGuards(GoogleAuthGuard)
   @Get('google/redirect')
   async googleAuthRedirect(@Req() req: Request, @Res() res: Response) {
     const data = await this.authService.googleLogin(req.user);
-    if (data && data.token) {
-      // Redireciona para o frontend já autenticado
-      return res.redirect(`https://www.agrototalapp.com.br/auth/success?token=${data.token}`);
+    if (data?.token) {
+      return res.redirect(
+        `https://www.agrototalapp.com.br/auth/success?token=${data.token}`,
+      );
     }
     return res.redirect('https://www.agrototalapp.com.br/auth/error');
   }
