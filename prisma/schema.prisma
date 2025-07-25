@@ -70,9 +70,15 @@ model Fazenda {
   lavouras     Lavoura[]
   animais      Animal[]
   titulares    TitularFazenda[]
-  dispositivos Dispositivo[] // ✅ relação com Dispositivo
-  leituras     LeituraDispositivo[] // ✅ relação com LeituraDispositivo
+  dispositivos Dispositivo[]
+  leituras     LeituraDispositivo[]
   Financeiro   Financeiro[]
+  manejos      Manejo[]
+  pesagens     Pesagem[]
+  ocorrencias  Ocorrencia[]
+  compras      CompraInsumo[]
+
+
 }
 
 model TitularFazenda {
@@ -112,6 +118,11 @@ model Animal {
   fazenda      Fazenda              @relation(fields: [fazendaId], references: [id])
   invernada    Invernada?           @relation(fields: [invernadaId], references: [id])
   Sanidade     Sanidade[]
+  medicamentos Medicamento[]
+  manejos      Manejo[]
+  pesagens     Pesagem[]
+  ocorrencias  Ocorrencia[]
+
 
   @@unique([fazendaId, brinco])
 }
@@ -206,6 +217,8 @@ model Usuario {
   acessos      LogAcesso[]
   dispositivos Dispositivo[]
   leituras     LeituraDispositivo[]
+  compras      CompraInsumo[]
+
 }
 
 model LogAcesso {
@@ -240,3 +253,81 @@ model Financeiro {
 
   fazenda Fazenda @relation(fields: [fazendaId], references: [id])
 }
+
+model Medicamento {
+  id           String   @id @default(uuid())
+  animalId     String
+  nome         String
+  data         DateTime
+  dosagem      String?
+  viaAplicacao String?
+  observacoes  String?
+  criadoEm     DateTime @default(now())
+
+  animal Animal @relation(fields: [animalId], references: [id])
+}
+
+model Manejo {
+  id         String   @id @default(uuid())
+  fazendaId  String
+  animalId   String
+  tipo       String
+  data       DateTime
+  observacao String?
+  criadoEm   DateTime @default(now())
+
+  animal  Animal  @relation(fields: [animalId], references: [id])
+  fazenda Fazenda @relation(fields: [fazendaId], references: [id])
+}
+
+model Pesagem {
+  id        String   @id @default(uuid())
+  animalId  String
+  fazendaId String
+  data      DateTime
+  pesoKg    Float
+  criadoEm  DateTime @default(now())
+
+  animal  Animal  @relation(fields: [animalId], references: [id])
+  fazenda Fazenda @relation(fields: [fazendaId], references: [id])
+}
+
+model Ocorrencia {
+  id          String   @id @default(uuid())
+  fazendaId   String
+  animalId    String?
+  titulo      String
+  descricao   String?
+  data        DateTime
+  tipo        String
+  criadoEm    DateTime @default(now())
+
+  fazenda Fazenda @relation(fields: [fazendaId], references: [id])
+  animal  Animal? @relation(fields: [animalId], references: [id])
+}
+
+model Insumo {
+  id        String   @id @default(uuid())
+  nome      String
+  unidade   String
+  tipo      String
+  criadoEm  DateTime @default(now())
+
+}
+
+ model CompraInsumo {
+  id         String   @id @default(uuid())
+  fazendaId  String
+  usuarioId  String
+  data       DateTime
+  insumo     String
+  quantidade Int
+  unidade    String
+  valor      Float
+  fornecedor String?
+  criadoEm   DateTime @default(now())
+
+  fazenda Fazenda @relation(fields: [fazendaId], references: [id])
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+}
+
