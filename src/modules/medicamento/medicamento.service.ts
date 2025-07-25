@@ -7,7 +7,7 @@ import { PrismaService } from 'src/prisma.service';
 import { CreateMedicamentoDto } from './dto/create-medicamento.dto';
 import { UpdateMedicamentoDto } from './dto/update-medicamento.dto';
 import { AuthUser } from 'src/common/decorators/auth-user.decorator';
-import { UsuarioPayload } from 'src/auth/dto/usuario-payload.interface';
+import { UsuarioPayload } from '../auth/dto/usuario-payload.interface';
 import { writeFileSync } from 'fs';
 import { join } from 'path';
 import { Parser } from 'json2csv';
