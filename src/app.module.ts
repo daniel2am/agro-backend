@@ -13,6 +13,7 @@ import { MedicamentoModule } from './modules/medicamento/medicamento.module';
 import { OcorrenciaModule } from './modules/ocorrencia/ocorrencia.module';
 import { HistoricoModule } from './modules/historico/historico.module';
 import { CompraInsumoModule } from './modules/compra-insumo/compra-insumo.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { CompraInsumoModule } from './modules/compra-insumo/compra-insumo.module
     // ...existing code...
     UsuarioModule,
     FazendaModule,
+    DashboardModule,
     OcorrenciaModule,
     MedicamentoModule,
     AnimalModule,
