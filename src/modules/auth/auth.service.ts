@@ -33,10 +33,14 @@ export class AuthService {
       senha: senhaCriptografada,
     });
 
+    const payload = { sub: user.id, email: user.email };
+    const token = this.jwtService.sign(payload);
+
     return {
-      message: 'Conta criada com sucesso',
+      token,
       user,
     };
+
   }
 
   async login(user: any) {
