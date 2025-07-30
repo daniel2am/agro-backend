@@ -1,11 +1,16 @@
 import {
-  IsDateString,
   IsEnum,
+  IsInt,
   IsOptional,
   IsString,
   Length,
-  Matches,
 } from 'class-validator';
+
+export enum UnidadeIdade {
+  dias = 'dias',
+  meses = 'meses',
+  anos = 'anos',
+}
 
 export class CreateAnimalDto {
   @IsString()
@@ -25,8 +30,14 @@ export class CreateAnimalDto {
   raca?: string;
 
   @IsOptional()
-  @IsDateString()
-  nascimento?: string;
+  @IsInt()
+  idade?: number;
+
+  @IsOptional()
+  @IsEnum(UnidadeIdade, {
+    message: 'unidadeIdade deve ser dias, meses ou anos',
+  })
+  unidadeIdade?: UnidadeIdade;
 
   @IsString()
   fazendaId: string;

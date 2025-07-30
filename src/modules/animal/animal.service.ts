@@ -137,13 +137,7 @@ export class AnimalService {
         .text(`Brinco: ${animal.brinco}`)
         .text(`Sexo: ${animal.sexo ?? 'N/A'}`)
         .text(`Raça: ${animal.raca ?? 'N/A'}`)
-        .text(
-          `Nascimento: ${
-            animal.nascimento
-              ? new Date(animal.nascimento).toLocaleDateString('pt-BR')
-              : 'N/A'
-          }`
-        )
+        .text(`Idade: ${animal.idade ? `${animal.idade} ${animal.unidadeIdade}` : 'N/A'}`)
         .text(`Fazenda: ${animal.fazenda?.nome ?? 'N/A'}`)
         .text(`Invernada: ${animal.invernada?.nome ?? 'N/A'}`)
         .moveDown();

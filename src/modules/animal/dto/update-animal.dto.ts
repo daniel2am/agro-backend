@@ -1,10 +1,11 @@
 import {
-  IsDateString,
   IsEnum,
+  IsInt,
   IsOptional,
   IsString,
   Length,
 } from 'class-validator';
+import { UnidadeIdade } from './create-animal.dto';
 
 export class UpdateAnimalDto {
   @IsOptional()
@@ -25,8 +26,14 @@ export class UpdateAnimalDto {
   raca?: string;
 
   @IsOptional()
-  @IsDateString()
-  nascimento?: string;
+  @IsInt()
+  idade?: number;
+
+  @IsOptional()
+  @IsEnum(UnidadeIdade, {
+    message: 'unidadeIdade deve ser dias, meses ou anos',
+  })
+  unidadeIdade?: UnidadeIdade;
 
   @IsOptional()
   @IsString()

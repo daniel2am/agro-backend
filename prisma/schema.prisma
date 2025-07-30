@@ -54,6 +54,12 @@ enum TipoFinanceiro {
   despesa
 }
 
+enum UnidadeIdade {
+  dias
+  meses
+  anos
+}
+
 model Fazenda {
   id            String        @id @default(uuid())
   nome          String
@@ -111,7 +117,8 @@ model Animal {
   nome         String?
   sexo         String?
   raca         String?
-  nascimento   DateTime?
+  idade         Int?
+  unidadeIdade  UnidadeIdade?
   leituras     LeituraDispositivo[]
   criadoEm     DateTime             @default(now())
   atualizadoEm DateTime             @updatedAt
