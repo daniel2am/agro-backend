@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsNumber, IsString } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateInvernadaDto {
   @IsNotEmpty()
@@ -7,7 +7,10 @@ export class CreateInvernadaDto {
 
   @IsNotEmpty()
   @IsNumber()
-  areaHa: number;
+  area: number;
+
+  @IsOptional()
+  poligono?: any; // tipo Json
 
   @IsNotEmpty()
   @IsString()

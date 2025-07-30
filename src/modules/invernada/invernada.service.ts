@@ -8,7 +8,14 @@ export class InvernadaService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateInvernadaDto) {
-    return this.prisma.invernada.create({ data: dto });
+    return this.prisma.invernada.create({
+      data: {
+        nome: dto.nome,
+        area: dto.area,
+        poligono: dto.poligono || undefined,
+        fazendaId: dto.fazendaId,
+      },
+    });
   }
 
   async findAllByUsuario(usuarioId: string) {
@@ -20,7 +27,12 @@ export class InvernadaService {
           },
         },
       },
-      include: { fazenda: true },
+      include: {
+        fazenda: true,
+        _count: {
+          select: { animais: true },
+        },
+      },
     });
   }
 
@@ -41,7 +53,13 @@ export class InvernadaService {
 
   async update(id: string, dto: UpdateInvernadaDto, usuarioId: string) {
     await this.findOne(id, usuarioId);
-    return this.prisma.invernada.update({ where: { id }, data: dto });
+    return this.prisma.invernada.update({
+      where: { id },
+      data: {
+        ...dto,
+        poligono: dto.poligono ?? undefined,
+      },
+    });
   }
 
   async remove(id: string, usuarioId: string) {

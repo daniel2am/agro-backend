@@ -123,7 +123,7 @@ model Animal {
   criadoEm     DateTime             @default(now())
   atualizadoEm DateTime             @updatedAt
   fazenda      Fazenda              @relation(fields: [fazendaId], references: [id])
-  invernada    Invernada?           @relation(fields: [invernadaId], references: [id])
+  invernada    Invernada?           @relation(fields: [invernadaId], references: [id], name: "AnimaisNaInvernada")
   Sanidade     Sanidade[]
   medicamentos Medicamento[]
   manejos      Manejo[]
@@ -137,13 +137,14 @@ model Animal {
 model Invernada {
   id        String               @id @default(uuid())
   nome      String
-  areaHa    Float
+  area      Float
+  poligono  Json?
   status    StatusInvernada      @default(disponivel)
   fazendaId String
   criadoEm  DateTime             @default(now())
   fazenda   Fazenda              @relation(fields: [fazendaId], references: [id])
-  animais   Animal[]
-  leituras  LeituraDispositivo[] // ✅ relação com LeituraDispositivo
+  animais   Animal[]             @relation("AnimaisNaInvernada")
+  leituras  LeituraDispositivo[]
 }
 
 model Lavoura {
