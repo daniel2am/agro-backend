@@ -22,6 +22,7 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterAuthDto) {
+    console.log('🧾 DTO recebido:', dto);
     const userExists = await this.usuarioService.findByEmail(dto.email);
     if (userExists) {
       throw new BadRequestException('E-mail já cadastrado');
@@ -33,9 +34,11 @@ export class AuthService {
       senha: senhaCriptografada,
     });
 
+    // 🔥 Gere o token aqui:
     const payload = { sub: user.id, email: user.email };
     const token = this.jwtService.sign(payload);
 
+    // ✅ Retorne o token e o usuário
     return {
       token,
       user,
