@@ -11,20 +11,32 @@ export class FazendaService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(data: CreateFazendaDto, usuarioId: string) {
+  try {
+    console.log('📨 Dados recebidos no service:', data);
+    console.log('👤 Usuario ID:', usuarioId);
+
     const fazenda = await this.prisma.fazenda.create({
       data: {
         ...data,
         usuarios: {
           create: [{
             usuarioId,
-            papel: 'administrador',
+            papel: 'administrador', // Certifique-se de que está no enum
           }],
         },
       },
     });
-    this.logger.log(`Fazenda criada: ${fazenda.id}`);
+
+    console.log('✅ Fazenda criada com sucesso:', fazenda.id);
     return fazenda;
+  } catch (error) {
+    console.error('❌ Erro ao criar fazenda:', error);
+    throw error;
   }
+}
+
+
+
 
   async findAll(usuarioId: string, params: any = {}) {
     const { take = 20, skip = 0, search } = params;
