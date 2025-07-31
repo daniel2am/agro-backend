@@ -24,7 +24,6 @@ export class AuthController {
 
   @Post('register')
   async register(@Body() dto: RegisterAuthDto) {
-    console.log('BODY RECEBIDO NO BACKEND:', dto); // <-- Adicione isso
     return this.authService.register(dto);
   }
 
