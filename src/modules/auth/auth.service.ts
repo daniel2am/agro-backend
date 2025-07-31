@@ -28,11 +28,7 @@ export class AuthService {
       throw new BadRequestException('E-mail já cadastrado');
     }
 
-    const senhaCriptografada = await bcrypt.hash(dto.senha, 10);
-    const user = await this.usuarioService.create({
-      ...dto,
-      senha: senhaCriptografada,
-    });
+    const user = await this.usuarioService.create(dto);
 
     // 🔥 Gere o token aqui:
     const payload = { sub: user.id, email: user.email };
