@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  Logger,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
 import { CreateFazendaDto } from './dto/create-fazenda.dto';
 import { UpdateFazendaDto } from './dto/update-fazenda.dto';
@@ -11,32 +17,35 @@ export class FazendaService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(data: CreateFazendaDto, usuarioId: string) {
-  try {
-    console.log('📨 Dados recebidos no service:', data);
-    console.log('👤 Usuario ID:', usuarioId);
+    try {
+      this.logger.log('📨 Dados recebidos no service: ' + JSON.stringify(data));
+      this.logger.log(`👤 Usuario ID: ${usuarioId}`);
 
-    const fazenda = await this.prisma.fazenda.create({
-      data: {
-        ...data,
-        usuarios: {
-          create: [{
-            usuarioId,
-            papel: 'administrador', // Certifique-se de que está no enum
-          }],
+      if (!usuarioId) {
+        throw new BadRequestException('Usuário não autenticado');
+      }
+
+      const fazenda = await this.prisma.fazenda.create({
+        data: {
+          ...data,
+          usuarios: {
+            create: [
+              {
+                usuarioId,
+                papel: 'administrador',
+              },
+            ],
+          },
         },
-      },
-    });
+      });
 
-    console.log('✅ Fazenda criada com sucesso:', fazenda.id);
-    return fazenda;
-  } catch (error) {
-    console.error('❌ Erro ao criar fazenda:', error);
-    throw error;
+      this.logger.log(`✅ Fazenda criada com sucesso: ${fazenda.id}`);
+      return fazenda;
+    } catch (error) {
+      this.logger.error('❌ Erro ao criar fazenda', error.stack || error.message);
+      throw error;
+    }
   }
-}
-
-
-
 
   async findAll(usuarioId: string, params: any = {}) {
     const { take = 20, skip = 0, search } = params;
@@ -75,20 +84,36 @@ export class FazendaService {
         },
       },
     });
-    if (!fazenda) throw new NotFoundException('Fazenda não encontrada ou acesso negado');
+
+    if (!fazenda) {
+      throw new NotFoundException('Fazenda não encontrada ou acesso negado');
+    }
+
     return fazenda;
   }
 
   async update(id: string, data: UpdateFazendaDto, usuarioId: string) {
-    const check = await this.findOne(id, usuarioId);
-    if (!check) throw new ForbiddenException('Acesso negado');
-    return this.prisma.fazenda.update({ where: { id }, data });
+    const existing = await this.findOne(id, usuarioId);
+    if (!existing) {
+      throw new ForbiddenException('Acesso negado');
+    }
+
+    return this.prisma.fazenda.update({
+      where: { id },
+      data,
+    });
   }
 
   async remove(id: string, usuarioId: string) {
-    const check = await this.findOne(id, usuarioId);
-    if (!check) throw new ForbiddenException('Acesso negado');
-    await this.prisma.fazenda.delete({ where: { id } });
+    const existing = await this.findOne(id, usuarioId);
+    if (!existing) {
+      throw new ForbiddenException('Acesso negado');
+    }
+
+    await this.prisma.fazenda.delete({
+      where: { id },
+    });
+
     return { message: 'Fazenda removida com sucesso' };
   }
 }
