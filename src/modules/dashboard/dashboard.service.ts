@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
+
 
 @Injectable()
 export class DashboardService {
@@ -92,5 +93,96 @@ export class DashboardService {
   return historico.slice(0, 2);
 }
 
+//indicadores
+async getIndicadores(
+  fazendaId: string,
+  tipo: 'peso' | 'financeiro',
+  usuarioId: string
+) {
+  // Verifica se o usuário tem acesso à fazenda
+  const fazenda = await this.prisma.fazenda.findFirst({
+    where: {
+      id: fazendaId,
+      usuarios: {
+        some: {
+          usuarioId,
+        },
+      },
+    },
+  });
+
+  if (!fazenda) {
+    throw new ForbiddenException('Acesso negado à fazenda');
+  }
+
+  if (tipo === 'peso') {
+    const registros = await this.prisma.pesagem.findMany({
+      where: {
+        animal: {
+          fazendaId,
+        },
+      },
+      orderBy: { data: 'asc' },
+    });
+
+      const dadosAgrupados: Record<string, { soma: number; qtd: number }> = registros.reduce((acc, registro) => {
+      const mesAno = `${registro.data.getFullYear()}-${(registro.data.getMonth() + 1)
+        .toString()
+        .padStart(2, '0')}`;
+
+      if (!acc[mesAno]) {
+        acc[mesAno] = { soma: 0, qtd: 0 };
+      }
+
+      acc[mesAno].soma += registro.pesoKg;
+      acc[mesAno].qtd += 1;
+
+      return acc;
+    }, {});
+
+    const resultado = Object.entries(dadosAgrupados).map(([mesAno, { soma, qtd }]) => ({
+      data: mesAno,
+      valor: +(soma / qtd).toFixed(2),
+    }));
+
+    return resultado;
+  }
+
+  if (tipo === 'financeiro') {
+    const registros = await this.prisma.financeiro.findMany({
+      where: {
+        fazendaId,
+      },
+      orderBy: { data: 'asc' },
+    });
+
+      const dadosAgrupados: Record<string, { receita: number; despesa: number }> = registros.reduce((acc, registro) => {
+      const mesAno = `${registro.data.getFullYear()}-${(registro.data.getMonth() + 1)
+        .toString()
+        .padStart(2, '0')}`;
+
+      if (!acc[mesAno]) {
+        acc[mesAno] = { receita: 0, despesa: 0 };
+      }
+
+      if (registro.tipo === 'receita') {
+        acc[mesAno].receita += registro.valor;
+      } else {
+        acc[mesAno].despesa += registro.valor;
+      }
+
+      return acc;
+    }, {});
+
+    const resultado = Object.entries(dadosAgrupados).map(([mesAno, valores]) => ({
+      data: mesAno,
+      valor: +(valores.receita - valores.despesa).toFixed(2),
+    }));
+
+    return resultado;
+  }
+
+  throw new BadRequestException('Tipo inválido');
+}
 
 }
