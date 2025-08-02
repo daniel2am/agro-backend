@@ -145,7 +145,10 @@ async getIndicadores(
       valor: +(soma / qtd).toFixed(2),
     }));
 
-    return resultado;
+    return {
+      labels: resultado.map((r) => r.data),
+      datasets: [{ data: resultado.map((r) => r.valor) }],
+    };
   }
 
   if (tipo === 'financeiro') {
@@ -179,7 +182,10 @@ async getIndicadores(
       valor: +(valores.receita - valores.despesa).toFixed(2),
     }));
 
-    return resultado;
+    return {
+      labels: resultado.map((r) => r.data),
+      datasets: [{ data: resultado.map((r) => r.valor) }],
+    };
   }
 
   throw new BadRequestException('Tipo inválido');
