@@ -1,8 +1,10 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Req, UseGuards } from '@nestjs/common';
 import { InvernadaService } from './invernada.service';
 import { CreateInvernadaDto } from './dto/create-invernada.dto';
 import { UpdateInvernadaDto } from './dto/update-invernada.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
+@UseGuards(JwtAuthGuard)
 @Controller('invernadas')
 export class InvernadaController {
   constructor(private readonly invernadaService: InvernadaService) {}
