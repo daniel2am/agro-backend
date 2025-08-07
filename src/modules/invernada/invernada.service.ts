@@ -18,13 +18,14 @@ export class InvernadaService {
     });
   }
 
-  async findAllByUsuario(usuarioId: string) {
+  async findAllByUsuario(usuarioId: string, fazendaId?: string) {
     return this.prisma.invernada.findMany({
       where: {
         fazenda: {
           usuarios: {
             some: { usuarioId },
           },
+          ...(fazendaId && { id: fazendaId}),
         },
       },
       include: {

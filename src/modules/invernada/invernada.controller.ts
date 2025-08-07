@@ -3,6 +3,7 @@ import { InvernadaService } from './invernada.service';
 import { CreateInvernadaDto } from './dto/create-invernada.dto';
 import { UpdateInvernadaDto } from './dto/update-invernada.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Query } from '@nestjs/common';
 
 @UseGuards(JwtAuthGuard)
 @Controller('invernadas')
@@ -15,8 +16,8 @@ export class InvernadaController {
   }
 
   @Get()
-  findAll(@Req() req) {
-    return this.invernadaService.findAllByUsuario(req.user.id);
+  findAll(@Req() req, @Query('fazendaId') fazendaId?: string) {
+    return this.invernadaService.findAllByUsuario(req.user.id, fazendaId);
   }
 
   @Get(':id')
