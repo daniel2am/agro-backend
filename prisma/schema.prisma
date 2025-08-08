@@ -116,8 +116,10 @@ model Animal {
   invernadaId  String?
   nome         String?
   sexo         String?
+  peso         Float?
+  lote         String?
   raca         String?
-  idade         Int?
+  idade        Int?
   unidadeIdade  UnidadeIdade?
   leituras     LeituraDispositivo[]
   criadoEm     DateTime             @default(now())
