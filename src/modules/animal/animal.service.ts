@@ -10,6 +10,7 @@ import { UpdateAnimalDto } from './dto/update-animal.dto';
 import { Parser } from 'json2csv';
 import * as PDFDocument from 'pdfkit';
 import * as streamBuffers from 'stream-buffers';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class AnimalService {
@@ -17,34 +18,77 @@ export class AnimalService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(data: CreateAnimalDto, usuarioId: string) {
-    await this.verificarAcessoAFazenda(data.fazendaId, usuarioId);
-    if (data.invernadaId) {
-      await this.verificarInvernada(data.invernadaId, data.fazendaId);
+  async create(dto: CreateAnimalDto, usuarioId: string) {
+    // garante acesso à fazenda
+    await this.verificarAcessoAFazenda(dto.fazendaId, usuarioId);
+
+    // se veio invernada, garante que é da mesma fazenda
+    if (dto.invernadaId) {
+      await this.verificarInvernada(dto.invernadaId, dto.fazendaId);
     }
-    return this.prisma.animal.create({ data });
+
+    // cria o animal
+    const animal = await this.prisma.animal.create({ data: dto });
+
+    // histórico de peso (opcional)
+    const peso = (dto as any)?.peso;
+    if (peso !== undefined && peso !== null && !Number.isNaN(Number(peso))) {
+      await this.prisma.pesagem.create({
+        data: {
+          animalId: animal.id,
+          fazendaId: dto.fazendaId,
+          data: new Date(),
+          pesoKg: Number(peso),
+        },
+      });
+    }
+
+    return animal;
   }
 
   async findAll(usuarioId: string, params: any = {}) {
-    const { take = 20, skip = 0, search, fazendaId } = params;
+    const take = Number(params?.take ?? 20);
+    const skip = Number(params?.skip ?? 0);
+    const search: string | undefined =
+      typeof params?.search === 'string' ? params.search : undefined;
+    const fazendaId: string | undefined =
+      typeof params?.fazendaId === 'string' ? params.fazendaId : undefined;
 
-    const where: any = {
+    const where: Prisma.AnimalWhereInput = {
       ...(fazendaId ? { fazendaId } : {}),
+      // restringe por fazendas às quais o usuário tem acesso
       fazenda: { usuarios: { some: { usuarioId } } },
+      ...(search
+        ? {
+            OR: [
+              {
+                brinco: {
+                  contains: search,
+                  mode: Prisma.QueryMode.insensitive,
+                },
+              },
+              {
+                raca: {
+                  contains: search,
+                  mode: Prisma.QueryMode.insensitive,
+                },
+              },
+              {
+                nome: {
+                  contains: search,
+                  mode: Prisma.QueryMode.insensitive,
+                },
+              },
+            ],
+          }
+        : {}),
     };
-
-    if (search) {
-      where.OR = [
-        { brinco: { contains: search, mode: 'insensitive' } },
-        { nome: { contains: search, mode: 'insensitive' } },
-      ];
-    }
 
     const [data, total] = await this.prisma.$transaction([
       this.prisma.animal.findMany({
         where,
-        take: Number(take),
-        skip: Number(skip),
+        take,
+        skip,
         orderBy: { brinco: 'asc' },
         include: { fazenda: true, invernada: true },
       }),
@@ -70,21 +114,40 @@ export class AnimalService {
     return animal;
   }
 
-  async update(id: string, data: UpdateAnimalDto, usuarioId: string) {
+  async update(id: string, dto: UpdateAnimalDto, usuarioId: string) {
+    // garante que o animal pertence a uma fazenda do usuário
     const animal = await this.prisma.animal.findFirst({
       where: {
         id,
         fazenda: { usuarios: { some: { usuarioId } } },
       },
     });
-
     if (!animal) throw new ForbiddenException('Acesso negado');
 
-    if (data.invernadaId) {
-      await this.verificarInvernada(data.invernadaId, animal.fazendaId);
+    // se vier invernada, valida que pertence à mesma fazenda
+    if (dto.invernadaId) {
+      await this.verificarInvernada(dto.invernadaId, animal.fazendaId);
     }
 
-    return this.prisma.animal.update({ where: { id }, data });
+    const atualizado = await this.prisma.animal.update({
+      where: { id },
+      data: dto,
+    });
+
+    // se veio um novo peso, registra no histórico
+    const peso = (dto as any)?.peso;
+    if (peso !== undefined && peso !== null && !Number.isNaN(Number(peso))) {
+      await this.prisma.pesagem.create({
+        data: {
+          animalId: id,
+          fazendaId: animal.fazendaId,
+          data: new Date(),
+          pesoKg: Number(peso),
+        },
+      });
+    }
+
+    return atualizado;
   }
 
   async remove(id: string, usuarioId: string) {
@@ -137,7 +200,11 @@ export class AnimalService {
         .text(`Brinco: ${animal.brinco}`)
         .text(`Sexo: ${animal.sexo ?? 'N/A'}`)
         .text(`Raça: ${animal.raca ?? 'N/A'}`)
-        .text(`Idade: ${animal.idade ? `${animal.idade} ${animal.unidadeIdade}` : 'N/A'}`)
+        .text(
+          `Idade: ${
+            animal.idade ? `${animal.idade} ${animal.unidadeIdade}` : 'N/A'
+          }`,
+        )
         .text(`Fazenda: ${animal.fazenda?.nome ?? 'N/A'}`)
         .text(`Invernada: ${animal.invernada?.nome ?? 'N/A'}`)
         .moveDown();
