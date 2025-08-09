@@ -19,18 +19,30 @@ export class AnimalService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateAnimalDto, usuarioId: string) {
-    // garante acesso à fazenda
     await this.verificarAcessoAFazenda(dto.fazendaId, usuarioId);
 
-    // se veio invernada, garante que é da mesma fazenda
     if (dto.invernadaId) {
       await this.verificarInvernada(dto.invernadaId, dto.fazendaId);
     }
 
-    // cria o animal
-    const animal = await this.prisma.animal.create({ data: dto });
+    // Monte data usando UncheckedCreate para aceitar FKs escalares
+    const data: Prisma.AnimalUncheckedCreateInput = {
+      brinco: dto.brinco,
+      fazendaId: dto.fazendaId,
+      invernadaId: dto.invernadaId ?? null,
+      nome: dto.nome ?? null,
+      sexo: dto.sexo ?? null, // 'M' | 'F'
+      raca: dto.raca ?? null,
+      idade: dto.idade ?? null,
+      unidadeIdade: dto.unidadeIdade ?? null,
+      // campos opcionais do modelo
+      peso: (dto as any)?.peso ?? null,
+      lote: (dto as any)?.lote ?? null,
+    };
 
-    // histórico de peso (opcional)
+    const animal = await this.prisma.animal.create({ data });
+
+    // histórico de peso
     const peso = (dto as any)?.peso;
     if (peso !== undefined && peso !== null && !Number.isNaN(Number(peso))) {
       await this.prisma.pesagem.create({
@@ -56,7 +68,6 @@ export class AnimalService {
 
     const where: Prisma.AnimalWhereInput = {
       ...(fazendaId ? { fazendaId } : {}),
-      // restringe por fazendas às quais o usuário tem acesso
       fazenda: { usuarios: { some: { usuarioId } } },
       ...(search
         ? {
@@ -115,32 +126,40 @@ export class AnimalService {
   }
 
   async update(id: string, dto: UpdateAnimalDto, usuarioId: string) {
-    // garante que o animal pertence a uma fazenda do usuário
-    const animal = await this.prisma.animal.findFirst({
+    const existente = await this.prisma.animal.findFirst({
       where: {
         id,
         fazenda: { usuarios: { some: { usuarioId } } },
       },
     });
-    if (!animal) throw new ForbiddenException('Acesso negado');
+    if (!existente) throw new ForbiddenException('Acesso negado');
 
-    // se vier invernada, valida que pertence à mesma fazenda
     if (dto.invernadaId) {
-      await this.verificarInvernada(dto.invernadaId, animal.fazendaId);
+      await this.verificarInvernada(dto.invernadaId, existente.fazendaId);
     }
+
+    const data: Prisma.AnimalUncheckedUpdateInput = {};
+    if (dto.brinco !== undefined) data.brinco = dto.brinco;
+    if (dto.nome !== undefined) data.nome = dto.nome ?? null;
+    if (dto.sexo !== undefined) data.sexo = dto.sexo ?? null;
+    if (dto.raca !== undefined) data.raca = dto.raca ?? null;
+    if (dto.idade !== undefined) data.idade = dto.idade ?? null;
+    if (dto.unidadeIdade !== undefined) data.unidadeIdade = dto.unidadeIdade ?? null;
+    if ((dto as any).peso !== undefined) data.peso = (dto as any).peso ?? null;
+    if ((dto as any).lote !== undefined) data.lote = (dto as any).lote ?? null;
+    if (dto.invernadaId !== undefined) data.invernadaId = dto.invernadaId ?? null;
 
     const atualizado = await this.prisma.animal.update({
       where: { id },
-      data: dto,
+      data,
     });
 
-    // se veio um novo peso, registra no histórico
     const peso = (dto as any)?.peso;
     if (peso !== undefined && peso !== null && !Number.isNaN(Number(peso))) {
       await this.prisma.pesagem.create({
         data: {
           animalId: id,
-          fazendaId: animal.fazendaId,
+          fazendaId: existente.fazendaId,
           data: new Date(),
           pesoKg: Number(peso),
         },
@@ -228,7 +247,6 @@ export class AnimalService {
         usuarios: { some: { usuarioId } },
       },
     });
-
     if (!fazenda) throw new ForbiddenException('Acesso negado à fazenda');
   }
 
@@ -236,7 +254,6 @@ export class AnimalService {
     const invernada = await this.prisma.invernada.findFirst({
       where: { id: invernadaId, fazendaId },
     });
-
     if (!invernada)
       throw new ForbiddenException('Invernada não encontrada nessa fazenda');
   }
