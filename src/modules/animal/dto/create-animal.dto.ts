@@ -45,4 +45,9 @@ export class CreateAnimalDto {
   @IsOptional()
   @IsString()
   invernadaId?: string;
+
+  @IsOptional()
+  @IsString()
+  lote?: string;
+
 }
