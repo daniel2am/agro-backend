@@ -6,7 +6,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { UsuarioService } from '../usuario/usuario.service';
 import { MailerService } from 'src/common/mailer/mailer.service';
-import * as bcrypt from 'bcryptjs';
+import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import {
   RegisterAuthDto,
@@ -149,13 +149,13 @@ export class AuthService {
   }
 
   async validateUser(email: string, senha: string) {
-    const user = await this.usuarioService.findByEmail(email);
-    const senhaValida = user && (await bcrypt.compare(senha, user.senha));
+  const user = await this.usuarioService.findByEmail(email);
+  if (!user) return null;
 
-    if (!senhaValida) {
-      throw new UnauthorizedException('E-mail ou senha inválidos');
-    }
+  const ok = await bcrypt.compare(senha, user.senha);
+  if (!ok) return null;
 
-    return user;
-  }
+  const { senha: _, ...safe } = user;
+  return safe;
+}
 }
