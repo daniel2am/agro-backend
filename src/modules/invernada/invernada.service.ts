@@ -1,3 +1,4 @@
+// src/modules/invernada/invernada.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 import { CreateInvernadaDto } from './dto/create-invernada.dto';
@@ -18,22 +19,27 @@ export class InvernadaService {
     });
   }
 
+  // ✅ listagem por fazenda (com _count)
+  findAllByFazenda(fazendaId: string) {
+    return this.prisma.invernada.findMany({
+      where: { fazendaId },
+      include: { _count: { select: { animais: true } } },
+      orderBy: { nome: 'asc' },
+    });
+  }
+
+  // ✅ listagem por usuário (mantendo _count e ordenação)
   async findAllByUsuario(usuarioId: string, fazendaId?: string) {
     return this.prisma.invernada.findMany({
       where: {
         ...(fazendaId && { fazendaId }),
-        fazenda: {
-          usuarios: {
-            some: { usuarioId },
-          },
-        },
+        fazenda: { usuarios: { some: { usuarioId } } },
       },
       include: {
         fazenda: true,
-        _count: {
-          select: { animais: true },
-        },
+        _count: { select: { animais: true } },
       },
+      orderBy: { nome: 'asc' },
     });
   }
 
@@ -41,14 +47,12 @@ export class InvernadaService {
     const invernada = await this.prisma.invernada.findFirst({
       where: {
         id,
-        fazenda: {
-          usuarios: {
-            some: { usuarioId },
-          },
-        },
+        fazenda: { usuarios: { some: { usuarioId } } },
       },
     });
-    if (!invernada) throw new NotFoundException('Invernada não encontrada ou acesso negado');
+    if (!invernada) {
+      throw new NotFoundException('Invernada não encontrada ou acesso negado');
+    }
     return invernada;
   }
 
@@ -56,10 +60,7 @@ export class InvernadaService {
     await this.findOne(id, usuarioId);
     return this.prisma.invernada.update({
       where: { id },
-      data: {
-        ...dto,
-        poligono: dto.poligono ?? undefined,
-      },
+      data: { ...dto, poligono: dto.poligono ?? undefined },
     });
   }
 
