@@ -14,7 +14,8 @@ async function bootstrap() {
     new ValidationPipe({
       transform: true,            // ativa @Type(() => Number), etc
       whitelist: true,            // remove props não declaradas no DTO
-      forbidNonWhitelisted: true, // 400 se vier campo extra
+      forbidNonWhitelisted: false, // 400 se vier campo extra
+      transformOptions: { enableImplicitConversion: true },
     }),
   );
 

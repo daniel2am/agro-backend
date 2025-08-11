@@ -1,6 +1,15 @@
 // src/modules/invernada/invernada.controller.ts
 import {
-  Controller, Get, Post, Body, Patch, Param, Delete, Req, UseGuards, Query,
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Req,
+  UseGuards,
+  Query,
 } from '@nestjs/common';
 import { InvernadaService } from './invernada.service';
 import { CreateInvernadaDto } from './dto/create-invernada.dto';
@@ -21,10 +30,8 @@ export class InvernadaController {
   @Get()
   findAll(@Req() req: Request, @Query('fazendaId') fazendaId?: string) {
     if (fazendaId) {
-      // ✅ quando vem a fazenda, lista por fazenda (com _count)
       return this.invernadaService.findAllByFazenda(fazendaId);
     }
-    // ✅ fallback: lista todas que o usuário tem acesso
     return this.invernadaService.findAllByUsuario(req.user['sub'], fazendaId);
   }
 
@@ -34,11 +41,7 @@ export class InvernadaController {
   }
 
   @Patch(':id')
-  update(
-    @Param('id') id: string,
-    @Body() dto: UpdateInvernadaDto,
-    @Req() req: Request,
-  ) {
+  update(@Param('id') id: string, @Body() dto: UpdateInvernadaDto, @Req() req: Request) {
     return this.invernadaService.update(id, dto, req.user['sub']);
   }
 
