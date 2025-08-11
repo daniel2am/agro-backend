@@ -1,14 +1,5 @@
 // src/modules/animal/dto/create-animal.dto.ts
-import {
-  IsEnum,
-  IsInt,
-  IsOptional,
-  IsString,
-  Length,
-  IsNumber,
-  IsIn,
-} from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsEnum, IsInt, IsOptional, IsString, Length, IsNumber, IsIn } from 'class-validator';
 
 export enum UnidadeIdade {
   dias = 'dias',
@@ -25,32 +16,22 @@ export class CreateAnimalDto {
   @IsString()
   nome?: string;
 
-  // Sexo somente 'M' ou 'F'
+  // use IsIn em vez de IsEnum com array
   @IsOptional()
   @IsIn(['M', 'F'], { message: 'sexo deve ser M ou F' })
-  sexo?: string;
+  sexo?: 'M' | 'F';
 
   @IsOptional()
   @IsString()
   raca?: string;
 
-  // Idade numérica
   @IsOptional()
-  @Type(() => Number)
   @IsInt()
   idade?: number;
 
   @IsOptional()
-  @IsEnum(UnidadeIdade, {
-    message: 'unidadeIdade deve ser dias, meses ou anos',
-  })
+  @IsEnum(UnidadeIdade, { message: 'unidadeIdade deve ser dias, meses ou anos' })
   unidadeIdade?: UnidadeIdade;
-
-  // Peso numérico (opcional)
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  peso?: number;
 
   @IsString()
   fazendaId: string;
@@ -58,6 +39,11 @@ export class CreateAnimalDto {
   @IsOptional()
   @IsString()
   invernadaId?: string;
+
+  // novos
+  @IsOptional()
+  @IsNumber()
+  peso?: number;
 
   @IsOptional()
   @IsString()
