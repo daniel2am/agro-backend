@@ -194,18 +194,30 @@ export class AnimalService {
 
   // DELETE
   async remove(id: string, usuarioId: string) {
-    const animal = await this.prisma.animal.findFirst({
-      where: {
-        id,
-        fazenda: { usuarios: { some: { usuarioId } } },
-      },
-    });
+  const animal = await this.prisma.animal.findFirst({
+    where: {
+      id,
+      fazenda: { usuarios: { some: { usuarioId } } },
+    },
+    select: { id: true, fazendaId: true },
+  });
 
-    if (!animal) throw new ForbiddenException('Acesso negado');
+  if (!animal) throw new ForbiddenException('Acesso negado');
 
-    await this.prisma.animal.delete({ where: { id } });
-    return { message: 'Animal removido com sucesso' };
-  }
+  await this.prisma.$transaction([
+    // Apaga dependentes que referenciam o animal
+    this.prisma.pesagem.deleteMany({ where: { animalId: id } }),
+    this.prisma.manejo.deleteMany({ where: { animalId: id } }),
+    this.prisma.ocorrencia.deleteMany({ where: { animalId: id } }),
+    this.prisma.sanidade.deleteMany({ where: { animalId: id } }),
+    this.prisma.medicamento.deleteMany({ where: { animalId: id } }),
+    this.prisma.leituraDispositivo.deleteMany({ where: { animalId: id } }),
+    // Por último, o animal
+    this.prisma.animal.delete({ where: { id } }),
+  ]);
+
+  return { message: 'Animal removido com sucesso' };
+}
 
   // EXPORT CSV
   async exportCSV(usuarioId: string) {
