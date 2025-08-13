@@ -1,3 +1,4 @@
+// src/modules/manejo/manejo.controller.ts
 import {
   Controller,
   Get,
@@ -9,14 +10,13 @@ import {
   UseGuards,
   Res,
 } from '@nestjs/common';
-import { ManejoService } from './manejo.service';
-import { CreateManejoDto } from './dto/create-manejo.dto';
-import { UpdateManejoDto } from './dto/update-manejo.dto';
+import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthUser } from 'src/common/decorators/auth-user.decorator';
 import { UsuarioPayload } from 'src/modules/auth/dto/usuario-payload.interface';
-import { Response } from 'express';
-import { createReadStream } from 'fs';
+import { ManejoService } from './manejo.service';
+import { CreateManejoDto } from './dto/create-manejo.dto';
+import { UpdateManejoDto } from './dto/update-manejo.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('manejos')
@@ -66,11 +66,10 @@ export class ManejoController {
     @AuthUser() user: UsuarioPayload,
     @Res() res: Response,
   ) {
-    const filePath = await this.manejoService.exportToCSV(user);
-    const stream = createReadStream(filePath);
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename=manejos.csv');
-    stream.pipe(res);
+    const csv = await this.manejoService.exportToCSV(user);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="manejos.csv"');
+    res.send(csv);
   }
 
   @Get('export/pdf')
@@ -78,10 +77,10 @@ export class ManejoController {
     @AuthUser() user: UsuarioPayload,
     @Res() res: Response,
   ) {
-    const filePath = await this.manejoService.exportToPDF(user);
-    const stream = createReadStream(filePath);
+    const doc = await this.manejoService.exportToPDF(user);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename=manejos.pdf');
-    stream.pipe(res);
+    res.setHeader('Content-Disposition', 'inline; filename="manejos.pdf"');
+    doc.pipe(res);
+    doc.end();
   }
 }

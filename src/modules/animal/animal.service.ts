@@ -1,3 +1,4 @@
+// src/modules/animal/animal.service.ts
 import {
   Injectable,
   NotFoundException,
@@ -18,6 +19,16 @@ export class AnimalService {
 
   constructor(private readonly prisma: PrismaService) {}
 
+  private async safeLog(usuarioId: string, acao: string) {
+    try {
+      await this.prisma.logAcesso.create({
+        data: { usuarioId, acao },
+      });
+    } catch (e) {
+      this.logger.warn(`Falha ao registrar log: ${String(e)}`);
+    }
+  }
+
   // CREATE
   async create(dto: CreateAnimalDto, usuarioId: string) {
     // garante acesso à fazenda
@@ -28,8 +39,7 @@ export class AnimalService {
       await this.verificarInvernada(dto.invernadaId, dto.fazendaId);
     }
 
-    // Agora NÃO descartamos peso/lote. Salvamos diretamente no Animal
-    // e também registramos histórico em Pesagem quando peso vier.
+    // Salva peso/lote direto na tabela Animal
     const animal = await this.prisma.animal.create({
       data: {
         brinco: dto.brinco,
@@ -38,8 +48,8 @@ export class AnimalService {
         raca: dto.raca ?? null,
         idade: dto.idade ?? null,
         unidadeIdade: dto.unidadeIdade ?? null,
-        peso: dto.peso ?? null, // <- grava o peso atual no Animal
-        lote: dto.lote ?? null, // <- grava o lote
+        peso: dto.peso ?? null,
+        lote: dto.lote ?? null,
         fazendaId: dto.fazendaId,
         invernadaId: dto.invernadaId ?? null,
       },
@@ -59,14 +69,19 @@ export class AnimalService {
           pesoKg: Number(dto.peso),
         },
       });
+      await this.safeLog(
+        usuarioId,
+        `pesagem_registrada animal=${animal.id} brinco=${animal.brinco} pesoKg=${Number(
+          dto.peso,
+        )} fazenda=${dto.fazendaId}`,
+      );
     }
 
-    await this.prisma.logAcesso.create({
-      data: {
-        usuarioId,
-        acao: `animal_criado: brinco=${animal.brinco}`,
-      },
-    });
+    await this.safeLog(
+      usuarioId,
+      `animal_criado brinco=${animal.brinco} id=${animal.id} fazenda=${dto.fazendaId}`,
+    );
+
     return animal;
   }
 
@@ -170,7 +185,6 @@ export class AnimalService {
       ...(dto.invernadaId !== undefined
         ? { invernadaId: dto.invernadaId ?? null }
         : {}),
-      // fazendaId não deve ser alterado aqui normalmente, então ignorei
     };
 
     const atualizado = await this.prisma.animal.update({
@@ -188,54 +202,56 @@ export class AnimalService {
       await this.prisma.pesagem.create({
         data: {
           animalId: id,
-          fazendaId: animal.fazendaId,
+          fazendaId: atualizado.fazendaId,
           data: new Date(),
           pesoKg: Number(dto.peso),
         },
       });
+      await this.safeLog(
+        usuarioId,
+        `pesagem_registrada animal=${id} brinco=${atualizado.brinco} pesoKg=${Number(
+          dto.peso,
+        )} fazenda=${atualizado.fazendaId}`,
+      );
     }
 
-    await this.prisma.logAcesso.create({
-      data: {
-        usuarioId,
-        acao: `animal_atualizado: brinco=${atualizado.brinco}`,
-      },
-    });
+    await this.safeLog(
+      usuarioId,
+      `animal_atualizado brinco=${atualizado.brinco} id=${atualizado.id} fazenda=${atualizado.fazendaId}`,
+    );
 
     return atualizado;
   }
 
   // DELETE
   async remove(id: string, usuarioId: string) {
-  const animal = await this.prisma.animal.findFirst({
-    where: {
-      id,
-      fazenda: { usuarios: { some: { usuarioId } } },
-    },
-    select: { id: true, fazendaId: true, brinco: true },
-  });
+    const animal = await this.prisma.animal.findFirst({
+      where: {
+        id,
+        fazenda: { usuarios: { some: { usuarioId } } },
+      },
+      select: { id: true, fazendaId: true, brinco: true },
+    });
 
-  if (!animal) throw new ForbiddenException('Acesso negado');
+    if (!animal) throw new ForbiddenException('Acesso negado');
 
-  await this.prisma.$transaction([
-    this.prisma.pesagem.deleteMany({ where: { animalId: id } }),
-    this.prisma.manejo.deleteMany({ where: { animalId: id } }),
-    this.prisma.ocorrencia.deleteMany({ where: { animalId: id } }),
-    this.prisma.sanidade.deleteMany({ where: { animalId: id } }),
-    this.prisma.medicamento.deleteMany({ where: { animalId: id } }),
-    this.prisma.leituraDispositivo.deleteMany({ where: { animalId: id } }),
-    this.prisma.animal.delete({ where: { id } }),
-  ]);
+    await this.prisma.$transaction([
+      this.prisma.pesagem.deleteMany({ where: { animalId: id } }),
+      this.prisma.manejo.deleteMany({ where: { animalId: id } }),
+      this.prisma.ocorrencia.deleteMany({ where: { animalId: id } }),
+      this.prisma.sanidade.deleteMany({ where: { animalId: id } }),
+      this.prisma.medicamento.deleteMany({ where: { animalId: id } }),
+      this.prisma.leituraDispositivo.deleteMany({ where: { animalId: id } }),
+      this.prisma.animal.delete({ where: { id } }),
+    ]);
 
-  await this.prisma.logAcesso.create({
-    data: {
+    await this.safeLog(
       usuarioId,
-      acao: `animal_excluido: brinco=${animal.brinco}`,
-    },
-  });
+      `animal_excluido brinco=${animal.brinco} id=${animal.id} fazenda=${animal.fazendaId}`,
+    );
 
-  return { message: 'Animal removido com sucesso' };
-}
+    return { message: 'Animal removido com sucesso' };
+  }
 
   // EXPORT CSV
   async exportCSV(usuarioId: string) {

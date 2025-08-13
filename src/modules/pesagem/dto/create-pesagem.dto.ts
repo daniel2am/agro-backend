@@ -1,12 +1,16 @@
-import { IsUUID, IsDateString, IsNumber } from 'class-validator';
+import { IsDateString, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreatePesagemDto {
-  @IsUUID()
+  @IsNotEmpty()
+  @IsString()
   animalId: string;
 
+  @IsNotEmpty()
   @IsDateString()
-  data: Date;
+  data: string; // ISO date
 
+  @IsNotEmpty()
   @IsNumber()
+  @Min(0)
   pesoKg: number;
 }

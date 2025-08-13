@@ -2,117 +2,234 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  Logger,
+  BadRequestException,
 } from '@nestjs/common';
-import { PrismaService } from 'src/prisma.service';
-import { CreateMedicamentoDto } from './dto/create-medicamento.dto';
-import { UpdateMedicamentoDto } from './dto/update-medicamento.dto';
-import { AuthUser } from 'src/common/decorators/auth-user.decorator';
-import { UsuarioPayload } from '../auth/dto/usuario-payload.interface';
-import { writeFileSync } from 'fs';
-import { join } from 'path';
-import { Parser } from 'json2csv';
-import * as PDFDocument from 'pdfkit';
+import { PrismaService } from '../../prisma.service';
+import { Prisma } from '@prisma/client';
+
+export interface CreateMedicamentoDto {
+  animalId: string;
+  nome: string;
+  data: Date | string;
+  dosagem?: string;
+  viaAplicacao?: string;
+  observacoes?: string;
+  proximaAplicacao?: Date | string | null;
+  lembreteAtivo?: boolean;
+}
+
+export interface UpdateMedicamentoDto {
+  nome?: string;
+  data?: Date | string;
+  dosagem?: string | null;
+  viaAplicacao?: string | null;
+  observacoes?: string | null;
+  proximaAplicacao?: Date | string | null;
+  lembreteAtivo?: boolean;
+}
+
+function toDateOrNull(v: unknown): Date | null {
+  if (v == null || v === '') return null;
+  const d = new Date(v as any);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
 
 @Injectable()
 export class MedicamentoService {
+  private readonly logger = new Logger(MedicamentoService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateMedicamentoDto, user: UsuarioPayload) {
-    const animal = await this.prisma.animal.findUnique({
-      where: { id: dto.animalId },
+  private async assertAcessoAoAnimal(animalId: string, usuarioId: string) {
+    const animal = await this.prisma.animal.findFirst({
+      where: {
+        id: animalId,
+        fazenda: { usuarios: { some: { usuarioId } } },
+      },
+      select: { id: true, fazendaId: true, brinco: true },
     });
+    if (!animal) throw new ForbiddenException('Acesso negado ao animal');
+    return animal;
+  }
 
-    if (!animal || animal.fazendaId !== user.fazendaId) {
-      throw new ForbiddenException('Animal não encontrado ou acesso negado');
+  private async safeLog(usuarioId: string, acao: string) {
+    try {
+      await this.prisma.logAcesso.create({ data: { usuarioId, acao } });
+    } catch (e) {
+      this.logger.warn(`Falha ao registrar log: ${String(e)}`);
+    }
+  }
+
+  // CREATE
+  async create(dto: CreateMedicamentoDto, usuarioId: string) {
+    const animal = await this.assertAcessoAoAnimal(dto.animalId, usuarioId);
+
+    const dataMedic = toDateOrNull(dto.data);
+    if (!dataMedic) throw new BadRequestException('Data inválida');
+
+    let prox = toDateOrNull(dto.proximaAplicacao);
+    const lembreteAtivo = !!dto.lembreteAtivo;
+
+    // regra: lembrete sem data -> desativa
+    if (lembreteAtivo && !prox) {
+      // opcional: lançar erro em vez de desativar
+      // throw new BadRequestException('Para ativar lembrete, informe proximaAplicacao');
+      // comportamento adotado: desativa
+      this.logger.warn(
+        'lembreteAtivo=true, mas proximaAplicacao ausente. Lembrete será desativado.',
+      );
     }
 
-    return this.prisma.medicamento.create({
+    // regra opcional: proximaAplicacao não pode ser antes da data do medicamento
+    if (prox && prox < dataMedic) {
+      throw new BadRequestException(
+        'A próxima aplicação não pode ser anterior à data do medicamento',
+      );
+    }
+
+    const novo = await this.prisma.medicamento.create({
       data: {
-        ...dto,
-        data: new Date(dto.data),
+        animalId: dto.animalId,
+        nome: dto.nome,
+        data: dataMedic,
+        dosagem: dto.dosagem ?? null,
+        viaAplicacao: dto.viaAplicacao ?? null,
+        observacoes: dto.observacoes ?? null,
+        proximaAplicacao: prox,
+        lembreteAtivo: !!(lembreteAtivo && prox),
+        // notificacaoId: null // preencher quando integrar push/scheduler
       },
-    });
-  }
-
-  async findAll(user: UsuarioPayload) {
-    return this.prisma.medicamento.findMany({
-      where: {
-        animal: {
-          fazendaId: user.fazendaId,
-        },
-      },
-      orderBy: {
-        data: 'desc',
-      },
-      include: {
-        animal: {
-          select: {
-            nome: true,
-            brinco: true,
-          },
-        },
-      },
-    });
-  }
-
-  async findOne(id: string, user: UsuarioPayload) {
-    const medicamento = await this.prisma.medicamento.findUnique({
-      where: { id },
       include: { animal: true },
     });
 
-    if (!medicamento || medicamento.animal.fazendaId !== user.fazendaId) {
-      throw new NotFoundException('Medicamento não encontrado');
+    await this.safeLog(
+      usuarioId,
+      `medicamento_criado: animal=${animal.brinco} nome=${novo.nome} data=${novo.data.toISOString()}`,
+    );
+
+    return novo;
+  }
+
+  // LIST por animal
+  async listByAnimal(animalId: string, usuarioId: string) {
+    await this.assertAcessoAoAnimal(animalId, usuarioId);
+    return this.prisma.medicamento.findMany({
+      where: { animalId },
+      orderBy: [
+        // primeiro quem tem lembrete e mais próximo, depois pela data do medicamento
+        { proximaAplicacao: 'asc' as const },
+        { data: 'desc' as const },
+      ],
+    });
+  }
+
+  // GET ONE
+  async findOne(id: string, usuarioId: string) {
+    const med = await this.prisma.medicamento.findFirst({
+      where: {
+        id,
+        animal: {
+          fazenda: { usuarios: { some: { usuarioId } } },
+        },
+      },
+      include: { animal: true },
+    });
+    if (!med) throw new NotFoundException('Medicamento não encontrado');
+    return med;
+  }
+
+  // UPDATE
+  async update(id: string, dto: UpdateMedicamentoDto, usuarioId: string) {
+    const current = await this.findOne(id, usuarioId);
+
+    const novaData = dto.data !== undefined ? toDateOrNull(dto.data) : undefined;
+    if (dto.data !== undefined && !novaData) {
+      throw new BadRequestException('Data inválida');
     }
 
-    return medicamento;
-  }
+    const novaProx =
+      dto.proximaAplicacao !== undefined ? toDateOrNull(dto.proximaAplicacao) : undefined;
 
-  async update(id: string, dto: UpdateMedicamentoDto, user: UsuarioPayload) {
-    const medicamento = await this.findOne(id, user);
+    // regra opcional: proximaAplicacao não pode ser anterior à data
+    if (novaProx && (novaData ?? current.data) && novaProx < (novaData ?? current.data)) {
+      throw new BadRequestException(
+        'A próxima aplicação não pode ser anterior à data do medicamento',
+      );
+    }
 
-    return this.prisma.medicamento.update({
+    // lógica de lembrete:
+    // - Se lembreteAtivo=false => zera notificacaoId e mantém proximaAplicacao como veio (ou nula)
+    // - Se lembreteAtivo=true mas sem proximaAplicacao (novaProx===null/undefined e current.proximaAplicacao null) => força false
+    let setLembreteAtivo: boolean | undefined = undefined;
+    let setNotificacaoId: string | null | undefined = undefined;
+
+    if (dto.lembreteAtivo !== undefined) {
+      if (dto.lembreteAtivo === false) {
+        setLembreteAtivo = false;
+        setNotificacaoId = null; // desvincula
+      } else {
+        // true: só mantém se houver (novaProx ?? current.proximaAplicacao)
+        const validaProx = novaProx !== undefined ? novaProx : current.proximaAplicacao;
+        setLembreteAtivo = !!validaProx;
+        if (!validaProx) {
+          this.logger.warn(
+            'lembreteAtivo=true sem proximaAplicacao. Lembrete permanecerá desativado.',
+          );
+          setLembreteAtivo = false;
+          setNotificacaoId = null;
+        }
+      }
+    }
+
+    const dataUpdate: Prisma.MedicamentoUpdateInput = {
+      ...(dto.nome !== undefined ? { nome: dto.nome } : {}),
+      ...(dto.dosagem !== undefined ? { dosagem: dto.dosagem } : {}),
+      ...(dto.viaAplicacao !== undefined ? { viaAplicacao: dto.viaAplicacao } : {}),
+      ...(dto.observacoes !== undefined ? { observacoes: dto.observacoes } : {}),
+      ...(novaData !== undefined ? { data: novaData } : {}),
+      ...(novaProx !== undefined ? { proximaAplicacao: novaProx } : {}),
+      ...(setLembreteAtivo !== undefined ? { lembreteAtivo: setLembreteAtivo } : {}),
+      ...(setNotificacaoId !== undefined ? { notificacaoId: setNotificacaoId } : {}),
+    };
+
+    const updated = await this.prisma.medicamento.update({
       where: { id },
-      data: {
-        ...dto,
-        data: dto.data ? new Date(dto.data) : medicamento.data,
+      data: dataUpdate,
+      include: { animal: true },
+    });
+
+    await this.safeLog(
+      usuarioId,
+      `medicamento_atualizado: animal=${updated.animal?.brinco ?? current.animal.brinco} nome=${updated.nome}`,
+    );
+
+    return updated;
+  }
+
+  // DELETE
+  async remove(id: string, usuarioId: string) {
+    const med = await this.findOne(id, usuarioId);
+
+    await this.prisma.medicamento.delete({ where: { id } });
+
+    await this.safeLog(
+      usuarioId,
+      `medicamento_excluido: animal=${med.animal?.brinco ?? ''} nome=${med.nome}`,
+    );
+
+    return { message: 'Medicamento removido com sucesso' };
+  }
+
+  // (Opcional) Buscar lembretes próximos — útil para CRON/worker
+  async listarLembretesPendentes(ate: Date) {
+    return this.prisma.medicamento.findMany({
+      where: {
+        lembreteAtivo: true,
+        proximaAplicacao: { lte: ate },
       },
+      include: { animal: true },
+      orderBy: { proximaAplicacao: 'asc' },
     });
-  }
-
-  async remove(id: string, user: UsuarioPayload) {
-    await this.findOne(id, user);
-    return this.prisma.medicamento.delete({ where: { id } });
-  }
-
-  async exportCSV(user: UsuarioPayload) {
-    const data = await this.findAll(user);
-    const parser = new Parser();
-    const csv = parser.parse(data);
-    const filePath = join(__dirname, 'medicamentos.csv');
-    writeFileSync(filePath, csv);
-    return filePath;
-  }
-
-  async exportPDF(user: UsuarioPayload) {
-    const data = await this.findAll(user);
-    const doc = new PDFDocument();
-    const filePath = join(__dirname, 'medicamentos.pdf');
-    doc.pipe(writeFileSync(filePath, '', { flag: 'w' }) as any);
-
-    doc.fontSize(16).text('Relatório de Medicamentos', { align: 'center' }).moveDown();
-    data.forEach((m) => {
-      doc
-        .fontSize(12)
-        .text(`Medicamento: ${m.nome}`)
-        .text(`Data: ${new Date(m.data).toLocaleDateString()}`)
-        .text(`Dosagem: ${m.dosagem ?? '-'}`)
-        .text(`Via: ${m.viaAplicacao ?? '-'}`)
-        .text(`Animal: ${m.animal?.nome ?? ''} (${m.animal?.brinco})`)
-        .moveDown();
-    });
-
-    doc.end();
-    return filePath;
   }
 }

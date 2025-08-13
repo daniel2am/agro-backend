@@ -1,21 +1,27 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
 import { CreateSanidadeDto } from './dto/create-sanidade.dto';
 import { UpdateSanidadeDto } from './dto/update-sanidade.dto';
 
 @Injectable()
 export class SanidadeService {
+  private readonly logger = new Logger(SanidadeService.name);
+
   constructor(private readonly prisma: PrismaService) {}
+
+  private async safeLog(usuarioId: string, acao: string) {
+    try {
+      await this.prisma.logAcesso.create({ data: { usuarioId, acao } });
+    } catch (e) {
+      this.logger.warn(`Falha ao registrar log: ${String(e)}`);
+    }
+  }
 
   async create(dto: CreateSanidadeDto, usuarioId: string) {
     const animal = await this.prisma.animal.findFirst({
       where: {
         id: dto.animalId,
-        fazenda: {
-          usuarios: {
-            some: { usuarioId },
-          },
-        },
+        fazenda: { usuarios: { some: { usuarioId } } },
       },
     });
 
@@ -23,29 +29,29 @@ export class SanidadeService {
       throw new ForbiddenException('Animal não encontrado ou acesso negado');
     }
 
-    return this.prisma.sanidade.create({
+    const novo = await this.prisma.sanidade.create({
       data: {
         data: new Date(dto.data),
         tipo: dto.tipo,
         observacoes: dto.observacoes,
-        animal: {
-          connect: { id: dto.animalId },
-        },
+        animalId: dto.animalId,
       },
+      include: { animal: true },
     });
+
+    await this.safeLog(
+      usuarioId,
+      `sanidade_criada: animal=${animal.brinco} tipo=${dto.tipo} data=${dto.data}`
+    );
+
+    return novo;
   }
 
   async findAll(usuarioId: string, params: any = {}) {
     const { take = 10, skip = 0, search } = params;
 
     const where: any = {
-      animal: {
-        fazenda: {
-          usuarios: {
-            some: { usuarioId },
-          },
-        },
-      },
+      animal: { fazenda: { usuarios: { some: { usuarioId } } } },
     };
 
     if (search) {
@@ -70,13 +76,7 @@ export class SanidadeService {
     const sanidade = await this.prisma.sanidade.findFirst({
       where: {
         id,
-        animal: {
-          fazenda: {
-            usuarios: {
-              some: { usuarioId },
-            },
-          },
-        },
+        animal: { fazenda: { usuarios: { some: { usuarioId } } } },
       },
       include: { animal: true },
     });
@@ -89,47 +89,52 @@ export class SanidadeService {
   }
 
   async update(id: string, dto: UpdateSanidadeDto, usuarioId: string) {
-    const exists = await this.prisma.sanidade.findFirst({
+    const registro = await this.prisma.sanidade.findFirst({
       where: {
         id,
-        animal: {
-          fazenda: {
-            usuarios: {
-              some: { usuarioId },
-            },
-          },
-        },
+        animal: { fazenda: { usuarios: { some: { usuarioId } } } },
       },
+      include: { animal: true },
     });
 
-    if (!exists) {
+    if (!registro) {
       throw new ForbiddenException('Acesso negado');
     }
 
-    return this.prisma.sanidade.update({
+    const atualizado = await this.prisma.sanidade.update({
       where: { id },
       data: dto,
+      include: { animal: true },
     });
+
+    await this.safeLog(
+      usuarioId,
+      `sanidade_atualizada: animal=${registro.animal.brinco} tipo=${dto.tipo ?? registro.tipo}`
+    );
+
+    return atualizado;
   }
 
   async remove(id: string, usuarioId: string) {
-    const exists = await this.prisma.sanidade.findFirst({
+    const registro = await this.prisma.sanidade.findFirst({
       where: {
         id,
-        animal: {
-          fazenda: {
-            usuarios: {
-              some: { usuarioId },
-            },
-          },
-        },
+        animal: { fazenda: { usuarios: { some: { usuarioId } } } },
       },
+      include: { animal: true },
     });
 
-    if (!exists) {
+    if (!registro) {
       throw new ForbiddenException('Acesso negado');
     }
 
-    return this.prisma.sanidade.delete({ where: { id } });
+    await this.prisma.sanidade.delete({ where: { id } });
+
+    await this.safeLog(
+      usuarioId,
+      `sanidade_excluida: animal=${registro.animal.brinco} tipo=${registro.tipo}`
+    );
+
+    return { message: 'Registro removido com sucesso' };
   }
 }

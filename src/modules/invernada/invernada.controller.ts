@@ -23,8 +23,8 @@ export class InvernadaController {
   constructor(private readonly invernadaService: InvernadaService) {}
 
   @Post()
-  create(@Body() dto: CreateInvernadaDto) {
-    return this.invernadaService.create(dto);
+  create(@Body() dto: CreateInvernadaDto, @Req() req: Request) {
+    return this.invernadaService.create(dto, req.user['sub']);
   }
 
   @Get()

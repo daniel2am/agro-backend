@@ -1,11 +1,13 @@
+// src/modules/compra-insumo/compra-insumo.service.ts
 import {
-  Injectable, NotFoundException, ForbiddenException
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
 import { CreateCompraInsumoDto } from './dto/create-compra.dto';
 import { UpdateCompraInsumoDto } from './dto/update-compra.dto';
 import { UsuarioPayload } from '../auth/dto/usuario-payload.interface';
-import { Response } from 'express';
 import { createObjectCsvStringifier } from 'csv-writer';
 import { PDFDocument } from 'pdfkit';
 
@@ -13,7 +15,33 @@ import { PDFDocument } from 'pdfkit';
 export class CompraInsumoService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // ===== Helpers =====
+  private async safeLog(usuarioId: string, acao: string) {
+    try {
+      await this.prisma.logAcesso.create({
+        data: { usuarioId, acao },
+      });
+    } catch {
+      // não quebra o fluxo se o log falhar
+    }
+  }
+
+  private async assertAcessoFazenda(fazendaId: string, usuarioId: string) {
+    const ok = await this.prisma.fazenda.findFirst({
+      where: { id: fazendaId, usuarios: { some: { usuarioId } } },
+      select: { id: true },
+    });
+    if (!ok) {
+      throw new ForbiddenException('Acesso negado à fazenda');
+    }
+  }
+
+  // ===== CRUD =====
   async create(dto: CreateCompraInsumoDto, user: UsuarioPayload) {
+    // garante acesso
+    await this.assertAcessoFazenda(user.fazendaId, user.id);
+
+    // cria compra
     const compra = await this.prisma.compraInsumo.create({
       data: {
         ...dto,
@@ -23,6 +51,7 @@ export class CompraInsumoService {
       },
     });
 
+    // cria espelho no financeiro (despesa)
     await this.prisma.financeiro.create({
       data: {
         fazendaId: user.fazendaId,
@@ -33,10 +62,18 @@ export class CompraInsumoService {
       },
     });
 
+    // log p/ dashboard
+    await this.safeLog(
+      user.id,
+      `compra_criada: id=${compra.id}, insumo=${dto.insumo}, qtd=${dto.quantidade}${dto.unidade ?? ''}, valor=${dto.valor}`,
+    );
+
     return compra;
   }
 
   async findAll(user: UsuarioPayload) {
+    await this.assertAcessoFazenda(user.fazendaId, user.id);
+
     return this.prisma.compraInsumo.findMany({
       where: { fazendaId: user.fazendaId },
       orderBy: { data: 'desc' },
@@ -47,9 +84,9 @@ export class CompraInsumoService {
     const compra = await this.prisma.compraInsumo.findFirst({
       where: { id, fazendaId: user.fazendaId },
     });
-
     if (!compra) throw new NotFoundException('Compra não encontrada');
 
+    // atualiza espelho no financeiro
     await this.prisma.financeiro.updateMany({
       where: {
         descricao: `Compra de ${compra.insumo}`,
@@ -65,22 +102,31 @@ export class CompraInsumoService {
       },
     });
 
-    return this.prisma.compraInsumo.update({
+    // atualiza compra
+    const atualizada = await this.prisma.compraInsumo.update({
       where: { id },
       data: {
         ...dto,
         data: dto.data ? new Date(dto.data) : undefined,
       },
     });
+
+    // log p/ dashboard
+    await this.safeLog(
+      user.id,
+      `compra_atualizada: id=${id}, insumo=${dto.insumo ?? compra.insumo}`,
+    );
+
+    return atualizada;
   }
 
   async remove(id: string, user: UsuarioPayload) {
     const compra = await this.prisma.compraInsumo.findFirst({
       where: { id, fazendaId: user.fazendaId },
     });
-
     if (!compra) throw new NotFoundException('Compra não encontrada');
 
+    // remove espelho no financeiro
     await this.prisma.financeiro.deleteMany({
       where: {
         descricao: `Compra de ${compra.insumo}`,
@@ -91,9 +137,16 @@ export class CompraInsumoService {
       },
     });
 
-    return this.prisma.compraInsumo.delete({ where: { id } });
+    // remove compra
+    await this.prisma.compraInsumo.delete({ where: { id } });
+
+    // log p/ dashboard
+    await this.safeLog(user.id, `compra_excluida: id=${id}, insumo=${compra.insumo}`);
+
+    return { message: 'Removido com sucesso' };
   }
 
+  // ===== Exportações =====
   async exportCSV(user: UsuarioPayload): Promise<string> {
     const registros = await this.findAll(user);
 

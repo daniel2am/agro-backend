@@ -1,10 +1,9 @@
+// src/modules/manejo/manejo.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
 import { CreateManejoDto } from './dto/create-manejo.dto';
 import { UpdateManejoDto } from './dto/update-manejo.dto';
 import { UsuarioPayload } from 'src/modules/auth/dto/usuario-payload.interface';
-import { writeFileSync } from 'fs';
-import { join } from 'path';
 import { Parser } from 'json2csv';
 import * as PDFDocument from 'pdfkit';
 
@@ -12,14 +11,29 @@ import * as PDFDocument from 'pdfkit';
 export class ManejoService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async safeLog(usuarioId: string, acao: string) {
+    try {
+      await this.prisma.logAcesso.create({ data: { usuarioId, acao } });
+    } catch {
+      // não quebra o fluxo se o log falhar
+    }
+  }
+
   async create(dto: CreateManejoDto, user: UsuarioPayload) {
-    return this.prisma.manejo.create({
+    const criado = await this.prisma.manejo.create({
       data: {
         ...dto,
         fazendaId: user.fazendaId,
         data: new Date(dto.data),
       },
     });
+
+    await this.safeLog(
+      user.id,
+      `manejo_criado: id=${criado.id}, tipo=${criado.tipo}, animalId=${criado.animalId ?? '-'}`
+    );
+
+    return criado;
   }
 
   async findAll(user: UsuarioPayload) {
@@ -45,44 +59,65 @@ export class ManejoService {
     });
     if (!check) throw new NotFoundException('Manejo não encontrado');
 
-    return this.prisma.manejo.update({
+    const atualizado = await this.prisma.manejo.update({
       where: { id },
       data: {
         ...dto,
         data: dto.data ? new Date(dto.data) : undefined,
       },
     });
+
+    await this.safeLog(
+      user.id,
+      `manejo_atualizado: id=${id}, tipo=${atualizado.tipo}, animalId=${atualizado.animalId ?? '-'}`
+    );
+
+    return atualizado;
   }
 
   async remove(id: string, user: UsuarioPayload) {
     const check = await this.prisma.manejo.findFirst({
       where: { id, fazendaId: user.fazendaId },
+      select: { id: true, tipo: true, animalId: true },
     });
     if (!check) throw new NotFoundException('Manejo não encontrado');
-    return this.prisma.manejo.delete({ where: { id } });
+
+    await this.prisma.manejo.delete({ where: { id } });
+
+    await this.safeLog(
+      user.id,
+      `manejo_excluido: id=${id}, tipo=${check.tipo}, animalId=${check.animalId ?? '-'}`
+    );
+
+    return { message: 'Manejo removido com sucesso' };
   }
 
-  async exportToCSV(user: UsuarioPayload) {
+  // === Export sem gravar em disco (igual fizemos em outros módulos) ===
+  async exportToCSV(user: UsuarioPayload): Promise<string> {
     const registros = await this.findAll(user);
     const parser = new Parser();
-    const csv = parser.parse(registros);
-    const filePath = join(__dirname, '..', '..', '..', 'csv', `manejos-${Date.now()}.csv`);
-    writeFileSync(filePath, csv);
-    return filePath;
+    return parser.parse(registros);
   }
 
-  async exportToPDF(user: UsuarioPayload) {
+  async exportToPDF(user: UsuarioPayload): Promise<PDFDocument> {
     const registros = await this.findAll(user);
     const doc = new PDFDocument();
-    const filePath = join(__dirname, '..', '..', '..', 'pdf', `manejos-${Date.now()}.pdf`);
-    doc.pipe(writeFileSync(filePath, '', { flag: 'w' }));
+
     doc.fontSize(16).text('Relatório de Manejos', { align: 'center' });
     doc.moveDown();
+
     registros.forEach((m) => {
-      doc.fontSize(12).text(`Animal: ${m.animal.nome} | Tipo: ${m.tipo} | Data: ${new Date(m.data).toLocaleDateString()} | Observação: ${m.observacao || '-'}`);
+      const data = new Date(m.data).toLocaleDateString();
+      const animalNome = m.animal?.nome ?? m.animal?.brinco ?? '—';
+      doc
+        .fontSize(12)
+        .text(
+          `Animal: ${animalNome} | Tipo: ${m.tipo} | Data: ${data} | Observação: ${m.observacao || '-'}`
+        );
       doc.moveDown(0.5);
     });
-    doc.end();
-    return filePath;
+
+    // devolvemos o PDFDocument para o controller encadear (pipe) na Response
+    return doc;
   }
 }
