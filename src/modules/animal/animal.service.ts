@@ -61,6 +61,12 @@ export class AnimalService {
       });
     }
 
+    await this.prisma.logAcesso.create({
+      data: {
+        usuarioId,
+        acao: `animal_criado: brinco=${animal.brinco}`,
+      },
+    });
     return animal;
   }
 
@@ -189,6 +195,13 @@ export class AnimalService {
       });
     }
 
+    await this.prisma.logAcesso.create({
+      data: {
+        usuarioId,
+        acao: `animal_atualizado: brinco=${atualizado.brinco}`,
+      },
+    });
+
     return atualizado;
   }
 
@@ -199,22 +212,27 @@ export class AnimalService {
       id,
       fazenda: { usuarios: { some: { usuarioId } } },
     },
-    select: { id: true, fazendaId: true },
+    select: { id: true, fazendaId: true, brinco: true },
   });
 
   if (!animal) throw new ForbiddenException('Acesso negado');
 
   await this.prisma.$transaction([
-    // Apaga dependentes que referenciam o animal
     this.prisma.pesagem.deleteMany({ where: { animalId: id } }),
     this.prisma.manejo.deleteMany({ where: { animalId: id } }),
     this.prisma.ocorrencia.deleteMany({ where: { animalId: id } }),
     this.prisma.sanidade.deleteMany({ where: { animalId: id } }),
     this.prisma.medicamento.deleteMany({ where: { animalId: id } }),
     this.prisma.leituraDispositivo.deleteMany({ where: { animalId: id } }),
-    // Por último, o animal
     this.prisma.animal.delete({ where: { id } }),
   ]);
+
+  await this.prisma.logAcesso.create({
+    data: {
+      usuarioId,
+      acao: `animal_excluido: brinco=${animal.brinco}`,
+    },
+  });
 
   return { message: 'Animal removido com sucesso' };
 }
