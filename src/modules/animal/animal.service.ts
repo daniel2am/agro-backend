@@ -1,4 +1,3 @@
-// src/modules/animal/animal.service.ts
 import {
   Injectable,
   NotFoundException,
@@ -29,20 +28,35 @@ export class AnimalService {
       await this.verificarInvernada(dto.invernadaId, dto.fazendaId);
     }
 
-    // NÃO enviar peso/lote para a tabela Animal (evita erro de client desatualizado no Render)
-    const { peso, lote, ...animalData } = dto as any;
-
-    // cria o animal
-    const animal = await this.prisma.animal.create({ data: animalData });
+    // Agora NÃO descartamos peso/lote. Salvamos diretamente no Animal
+    // e também registramos histórico em Pesagem quando peso vier.
+    const animal = await this.prisma.animal.create({
+      data: {
+        brinco: dto.brinco,
+        nome: dto.nome ?? null,
+        sexo: dto.sexo ?? null,
+        raca: dto.raca ?? null,
+        idade: dto.idade ?? null,
+        unidadeIdade: dto.unidadeIdade ?? null,
+        peso: dto.peso ?? null, // <- grava o peso atual no Animal
+        lote: dto.lote ?? null, // <- grava o lote
+        fazendaId: dto.fazendaId,
+        invernadaId: dto.invernadaId ?? null,
+      },
+    });
 
     // histórico de peso (opcional)
-    if (peso !== undefined && peso !== null && !Number.isNaN(Number(peso))) {
+    if (
+      dto.peso !== undefined &&
+      dto.peso !== null &&
+      !Number.isNaN(Number(dto.peso))
+    ) {
       await this.prisma.pesagem.create({
         data: {
           animalId: animal.id,
           fazendaId: dto.fazendaId,
           data: new Date(),
-          pesoKg: Number(peso),
+          pesoKg: Number(dto.peso),
         },
       });
     }
@@ -50,7 +64,7 @@ export class AnimalService {
     return animal;
   }
 
-  // LIST
+  // LIST (paginada — retorna { data, total })
   async findAll(usuarioId: string, params: any = {}) {
     const take = Number(params?.take ?? 20);
     const skip = Number(params?.skip ?? 0);
@@ -61,7 +75,6 @@ export class AnimalService {
 
     const where: Prisma.AnimalWhereInput = {
       ...(fazendaId ? { fazendaId } : {}),
-      // restringe por fazendas às quais o usuário tem acesso
       fazenda: { usuarios: { some: { usuarioId } } },
       ...(search
         ? {
@@ -136,22 +149,42 @@ export class AnimalService {
       await this.verificarInvernada(dto.invernadaId, animal.fazendaId);
     }
 
-    // strip peso/lote do update para não quebrar caso o client não tenha essas colunas
-    const { peso, lote, ...updateData } = dto as any;
+    // Monta o objeto de update incluindo peso/lote se vierem
+    const dataUpdate: Prisma.AnimalUpdateInput = {
+      ...(dto.brinco !== undefined ? { brinco: dto.brinco } : {}),
+      ...(dto.nome !== undefined ? { nome: dto.nome ?? null } : {}),
+      ...(dto.sexo !== undefined ? { sexo: dto.sexo ?? null } : {}),
+      ...(dto.raca !== undefined ? { raca: dto.raca ?? null } : {}),
+      ...(dto.idade !== undefined ? { idade: dto.idade ?? null } : {}),
+      ...(dto.unidadeIdade !== undefined
+        ? { unidadeIdade: dto.unidadeIdade ?? null }
+        : {}),
+      ...(dto.lote !== undefined ? { lote: dto.lote ?? null } : {}),
+      ...(dto.peso !== undefined ? { peso: dto.peso ?? null } : {}),
+      ...(dto.invernadaId !== undefined
+        ? { invernadaId: dto.invernadaId ?? null }
+        : {}),
+      // fazendaId não deve ser alterado aqui normalmente, então ignorei
+    };
 
     const atualizado = await this.prisma.animal.update({
       where: { id },
-      data: updateData,
+      data: dataUpdate,
+      include: { fazenda: true, invernada: true },
     });
 
     // novo peso? registra no histórico
-    if (peso !== undefined && peso !== null && !Number.isNaN(Number(peso))) {
+    if (
+      dto.peso !== undefined &&
+      dto.peso !== null &&
+      !Number.isNaN(Number(dto.peso))
+    ) {
       await this.prisma.pesagem.create({
         data: {
           animalId: id,
           fazendaId: animal.fazendaId,
           data: new Date(),
-          pesoKg: Number(peso),
+          pesoKg: Number(dto.peso),
         },
       });
     }
@@ -217,6 +250,8 @@ export class AnimalService {
             animal.idade ? `${animal.idade} ${animal.unidadeIdade}` : 'N/A'
           }`,
         )
+        .text(`Peso: ${animal.peso ?? 'N/A'}`)
+        .text(`Lote: ${animal.lote ?? 'N/A'}`)
         .text(`Fazenda: ${animal.fazenda?.nome ?? 'N/A'}`)
         .text(`Invernada: ${animal.invernada?.nome ?? 'N/A'}`)
         .moveDown();
