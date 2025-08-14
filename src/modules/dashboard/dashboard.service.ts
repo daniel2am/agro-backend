@@ -2,55 +2,80 @@
 import { Injectable, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 
-type HistoricoItem = { tipo: string; descricao: string; data: Date };
+type HistoricoItem = {
+  tipo: string;
+  descricao: string;
+  data: Date;
+  meta?: any;
+};
 
 @Injectable()
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Mantive as chaves iguais pra não quebrar o app:
-  // totalAnimais, totalReceitas, totalDespesas, totalNotificacoes
   async getResumoDaFazenda(fazendaId: string) {
-    const [totalAnimais, totalReceitas, totalDespesas, totalNotificacoes] =
-      await Promise.all([
-        this.prisma.animal.count({ where: { fazendaId } }),
-        this.prisma.financeiro.aggregate({
-          where: { fazendaId, tipo: 'receita' },
-          _sum: { valor: true },
-        }),
-        this.prisma.financeiro.aggregate({
-          where: { fazendaId, tipo: 'despesa' },
-          _sum: { valor: true },
-        }),
-        // segue sendo “ocorrencias” (como você já tinha)
-        this.prisma.ocorrencia.count({ where: { fazendaId } }),
-      ]);
+    const [
+      totalAnimais,
+      totalReceitasAgg,
+      totalDespesasAgg,
+      totalNotificacoes,
+      totalHectaresAgg,
+    ] = await Promise.all([
+      this.prisma.animal.count({ where: { fazendaId } }),
+      this.prisma.financeiro.aggregate({ where: { fazendaId, tipo: 'receita' }, _sum: { valor: true } }),
+      this.prisma.financeiro.aggregate({ where: { fazendaId, tipo: 'despesa' }, _sum: { valor: true } }),
+      this.prisma.ocorrencia.count({ where: { fazendaId } }),
+      this.prisma.lavoura.aggregate({ where: { fazendaId }, _sum: { areaHa: true } }),
+    ]);
+
+    const totalReceitas = totalReceitasAgg._sum.valor || 0;
+    const totalDespesas = totalDespesasAgg._sum.valor || 0;
+    const saldo = +(totalReceitas - totalDespesas).toFixed(2);
+    const totalHectares = +(totalHectaresAgg._sum.areaHa || 0);
 
     return {
       totalAnimais,
-      totalReceitas: totalReceitas._sum.valor || 0,
-      totalDespesas: totalDespesas._sum.valor || 0,
+      totalReceitas,
+      totalDespesas,
       totalNotificacoes,
+      saldo,
+      totalHectares,
+      notificacoes: totalNotificacoes,
     };
   }
 
-  /**
-   * Histórico unificado:
-   * - últimos registros nativos (2 de cada): Animal, Lavoura, Invernada, Manejo,
-   *   CompraInsumo, Pesagem, Financeiro, Sanidade, Medicamento
-   * - MAIS últimos logs do usuário (LogAcesso), que capturam create/update/delete
-   *
-   * Retorna os 6 mais recentes (misturado), ordenados por data desc.
-   */
+  private parseAnimalUpdate(acao: string): { brinco?: string; changes?: string[] } {
+    try {
+      // formato: "animal_atualizado brinco=XYZ id=... fazenda=... changes=a,b,c"
+      const parts = acao.split(' ').slice(1);
+      const map: Record<string, string> = {};
+      for (const p of parts) {
+        const [k, v] = p.split('=');
+        if (k && v) map[k.trim()] = v.trim();
+      }
+      const brinco = map['brinco'];
+      const changes = (map['changes'] ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      return { brinco, changes };
+    } catch {
+      return {};
+    }
+  }
+
   async getHistoricoRecentes(fazendaId: string, usuarioId: string) {
-    // 1) “eventos base” (2 de cada) — todos restritos à fazenda:
+    const fazenda = await this.prisma.fazenda.findFirst({
+      where: { id: fazendaId, usuarios: { some: { usuarioId } } },
+    });
+    if (!fazenda) throw new ForbiddenException('Acesso negado à fazenda');
+
     const [
       animais,
       lavouras,
       invernadas,
       manejos,
       compras,
-      pesagens,
       financeiros,
       sanidades,
       medicamentos,
@@ -59,210 +84,362 @@ export class DashboardService {
         where: { fazendaId },
         orderBy: { criadoEm: 'desc' },
         take: 2,
-        select: { criadoEm: true, nome: true, brinco: true },
+        select: {
+          id: true,
+          criadoEm: true,
+          brinco: true,
+          sexo: true,
+          raca: true,
+          idade: true,
+          unidadeIdade: true,
+          lote: true,
+          invernada: { select: { nome: true } },
+        },
       }),
       this.prisma.lavoura.findMany({
         where: { fazendaId },
         orderBy: { criadoEm: 'desc' },
         take: 2,
-        select: { criadoEm: true, nome: true, areaHa: true },
+        select: { id: true, criadoEm: true, nome: true, areaHa: true, cultura: true },
       }),
       this.prisma.invernada.findMany({
         where: { fazendaId },
         orderBy: { criadoEm: 'desc' },
         take: 2,
-        select: { criadoEm: true, nome: true, area: true },
+        select: { id: true, criadoEm: true, nome: true, area: true },
       }),
       this.prisma.manejo.findMany({
         where: { fazendaId },
         orderBy: { data: 'desc' },
         take: 2,
-        select: { data: true, tipo: true, observacao: true },
+        select: {
+          id: true,
+          data: true,
+          tipo: true,
+          observacao: true,
+          animalId: true,
+          animal: {
+            select: {
+              id: true,
+              brinco: true,
+              sexo: true,
+              raca: true,
+              idade: true,
+              unidadeIdade: true,
+              lote: true,
+              invernada: { select: { nome: true } },
+            },
+          },
+        },
       }),
       this.prisma.compraInsumo.findMany({
         where: { fazendaId },
         orderBy: { data: 'desc' },
         take: 2,
-        select: { data: true, insumo: true, quantidade: true, unidade: true, valor: true },
-      }),
-      this.prisma.pesagem.findMany({
-        where: { fazendaId },
-        orderBy: { data: 'desc' },
-        take: 2,
-        select: { data: true, pesoKg: true },
+        select: { id: true, data: true, insumo: true, quantidade: true, unidade: true, valor: true, fornecedor: true },
       }),
       this.prisma.financeiro.findMany({
         where: { fazendaId },
         orderBy: { data: 'desc' },
         take: 2,
-        select: { data: true, descricao: true, tipo: true, valor: true },
+        select: { id: true, data: true, descricao: true, tipo: true, valor: true },
       }),
       this.prisma.sanidade.findMany({
         where: { animal: { fazendaId } },
         orderBy: { criadoEm: 'desc' },
         take: 2,
-        select: { criadoEm: true, tipo: true },
+        select: {
+          id: true,
+          criadoEm: true,
+          tipo: true,
+          observacoes: true,
+          animalId: true,
+          animal: {
+            select: {
+              id: true,
+              brinco: true,
+              sexo: true,
+              raca: true,
+              idade: true,
+              unidadeIdade: true,
+              lote: true,
+              invernada: { select: { nome: true } },
+            },
+          },
+        },
       }),
       this.prisma.medicamento.findMany({
         where: { animal: { fazendaId } },
         orderBy: { criadoEm: 'desc' },
         take: 2,
-        select: { criadoEm: true, nome: true, proximaAplicacao: true },
+        select: {
+          id: true,
+          criadoEm: true,
+          nome: true,
+          dosagem: true,
+          viaAplicacao: true,
+          observacoes: true,
+          proximaAplicacao: true,
+          lembreteAtivo: true,
+          animalId: true,
+          animal: {
+            select: {
+              id: true,
+              brinco: true,
+              sexo: true,
+              raca: true,
+              idade: true,
+              unidadeIdade: true,
+              lote: true,
+              invernada: { select: { nome: true } },
+            },
+          },
+        },
       }),
     ]);
 
-    const historicoBase: HistoricoItem[] = [];
+    const historico: HistoricoItem[] = [];
 
-    // animais
-    animais.forEach((a) => {
-      historicoBase.push({
+    // animal criado
+    animais.forEach((a) =>
+      historico.push({
         tipo: 'animal',
-        descricao: `Animal ${a.nome ?? a.brinco ?? 'sem nome'} cadastrado`,
+        descricao: `Animal ${a.brinco} cadastrado`,
         data: a.criadoEm,
-      });
-    });
+        meta: {
+          ids: { animalId: a.id },
+          animal: {
+            brinco: a.brinco,
+            sexo: a.sexo,
+            raca: a.raca,
+            idade: a.idade,
+            unidadeIdade: a.unidadeIdade,
+            lote: a.lote,
+            invernada: a.invernada?.nome ?? null,
+          },
+        },
+      })
+    );
 
-    // lavouras
-    lavouras.forEach((l) => {
-      historicoBase.push({
+    // lavoura
+    lavouras.forEach((l) =>
+      historico.push({
         tipo: 'lavoura',
-        descricao: `Lavoura ${l.nome} cadastrada (${(l.areaHa ?? 0).toFixed(2)} ha)`,
+        descricao: `Lavoura ${l.nome} (${(l.areaHa ?? 0).toFixed(2)} ha)`,
         data: l.criadoEm,
-      });
-    });
+        meta: { ids: { lavouraId: l.id }, lavoura: { nome: l.nome, areaHa: l.areaHa, cultura: l.cultura } },
+      })
+    );
 
-    // invernadas
-    invernadas.forEach((inv) => {
-      historicoBase.push({
+    // invernada
+    invernadas.forEach((inv) =>
+      historico.push({
         tipo: 'invernada',
-        descricao: `Invernada ${inv.nome} cadastrada (${(inv.area ?? 0).toFixed(2)} ha)`,
+        descricao: `Invernada ${inv.nome} (${(inv.area ?? 0).toFixed(2)} ha)`,
         data: inv.criadoEm,
-      });
-    });
+        meta: { ids: { invernadaId: inv.id }, invernada: { nome: inv.nome, area: inv.area } },
+      })
+    );
 
-    // manejos
-    manejos.forEach((m) => {
-      historicoBase.push({
+    // manejo
+    manejos.forEach((m) =>
+      historico.push({
         tipo: 'manejo',
-        descricao: `Manejo: ${m.tipo}${m.observacao ? ` — ${m.observacao}` : ''}`,
+        descricao: `Manejo: ${m.tipo}`,
         data: m.data,
-      });
-    });
+        meta: {
+          ids: { manejoId: m.id, animalId: m.animalId },
+          manejo: { tipo: m.tipo, observacao: m.observacao ?? null },
+          animal: {
+            brinco: m.animal?.brinco ?? null,
+            sexo: m.animal?.sexo ?? null,
+            raca: m.animal?.raca ?? null,
+            idade: m.animal?.idade ?? null,
+            unidadeIdade: m.animal?.unidadeIdade ?? null,
+            lote: m.animal?.lote ?? null,
+            invernada: m.animal?.invernada?.nome ?? null,
+          },
+        },
+      })
+    );
 
-    // compras de insumo
-    compras.forEach((c) => {
-      historicoBase.push({
+    // compra
+    compras.forEach((c) =>
+      historico.push({
         tipo: 'compra',
-        descricao: `Compra de ${c.insumo} — ${c.quantidade} ${c.unidade} (R$ ${c.valor.toFixed(2)})`,
+        descricao: `Compra de ${c.insumo}`,
         data: c.data,
-      });
+        meta: {
+          ids: { compraId: c.id },
+          compra: {
+            insumo: c.insumo,
+            quantidade: c.quantidade,
+            unidade: c.unidade,
+            valor: c.valor,
+            fornecedor: c.fornecedor ?? null,
+          },
+        },
+      })
+    );
+
+    // PESAGENS com id e peso anterior
+    const pesagens = await this.prisma.pesagem.findMany({
+      where: { fazendaId },
+      orderBy: { data: 'desc' },
+      take: 2,
+      select: {
+        id: true,
+        data: true,
+        pesoKg: true,
+        animalId: true,
+        animal: {
+          select: {
+            id: true,
+            brinco: true,
+            sexo: true,
+            raca: true,
+            idade: true,
+            unidadeIdade: true,
+            lote: true,
+            invernada: { select: { nome: true } },
+          },
+        },
+      },
     });
 
-    // pesagens
-    pesagens.forEach((p) => {
-      historicoBase.push({
+    for (const p of pesagens) {
+      const anterior = await this.prisma.pesagem.findFirst({
+        where: { animalId: p.animalId, data: { lt: p.data } },
+        orderBy: { data: 'desc' },
+        select: { pesoKg: true, data: true },
+      });
+
+      historico.push({
         tipo: 'pesagem',
         descricao: `Pesagem registrada: ${p.pesoKg} kg`,
         data: p.data,
+        meta: {
+          ids: { pesagemId: p.id, animalId: p.animalId },
+          animal: {
+            brinco: p.animal?.brinco ?? null,
+            sexo: p.animal?.sexo ?? null,
+            raca: p.animal?.raca ?? null,
+            idade: p.animal?.idade ?? null,
+            unidadeIdade: p.animal?.unidadeIdade ?? null,
+            lote: p.animal?.lote ?? null,
+            invernada: p.animal?.invernada?.nome ?? null,
+            pesoAtual: p.pesoKg,
+            pesoAnterior: anterior?.pesoKg ?? null,
+            dataAnterior: anterior?.data ?? null,
+          },
+        },
       });
-    });
+    }
 
     // financeiro
-    financeiros.forEach((f) => {
-      historicoBase.push({
+    financeiros.forEach((f) =>
+      historico.push({
         tipo: 'financeiro',
-        descricao: `Lançamento ${f.tipo}: ${f.descricao} (R$ ${f.valor.toFixed(2)})`,
+        descricao: `Lançamento ${f.tipo}: ${f.descricao}`,
         data: f.data,
-      });
-    });
+        meta: { ids: { financeiroId: f.id }, financeiro: { descricao: f.descricao, tipo: f.tipo, valor: f.valor } },
+      })
+    );
 
     // sanidade
-    sanidades.forEach((s) => {
-      historicoBase.push({
+    sanidades.forEach((s) =>
+      historico.push({
         tipo: 'sanidade',
-        descricao: `Sanidade registrada: ${s.tipo}`,
+        descricao: `Sanidade: ${s.tipo}`,
         data: s.criadoEm,
-      });
-    });
+        meta: {
+          ids: { sanidadeId: s.id, animalId: s.animalId },
+          sanidade: { tipo: s.tipo, observacoes: s.observacoes ?? null },
+          animal: {
+            brinco: s.animal?.brinco ?? null,
+            sexo: s.animal?.sexo ?? null,
+            raca: s.animal?.raca ?? null,
+            idade: s.animal?.idade ?? null,
+            unidadeIdade: s.animal?.unidadeIdade ?? null,
+            lote: s.animal?.lote ?? null,
+            invernada: s.animal?.invernada?.nome ?? null,
+          },
+        },
+      })
+    );
 
     // medicamento
-    medicamentos.forEach((m) => {
-      historicoBase.push({
+    medicamentos.forEach((m) =>
+      historico.push({
         tipo: 'medicamento',
-        descricao: `Medicamento aplicado: ${m.nome}${
-          m.proximaAplicacao ? ` — próxima: ${m.proximaAplicacao.toLocaleDateString()}` : ''
-        }`,
+        descricao: `Medicamento: ${m.nome}`,
         data: m.criadoEm,
-      });
-    });
+        meta: {
+          ids: { medicamentoId: m.id, animalId: m.animalId },
+          medicamento: {
+            nome: m.nome,
+            dosagem: m.dosagem ?? null,
+            viaAplicacao: m.viaAplicacao ?? null,
+            observacoes: m.observacoes ?? null,
+            proximaAplicacao: m.proximaAplicacao ?? null,
+            lembreteAtivo: m.lembreteAtivo ?? false,
+          },
+          animal: {
+            brinco: m.animal?.brinco ?? null,
+            sexo: m.animal?.sexo ?? null,
+            raca: m.animal?.raca ?? null,
+            idade: m.animal?.idade ?? null,
+            unidadeIdade: m.animal?.unidadeIdade ?? null,
+            lote: m.animal?.lote ?? null,
+            invernada: m.animal?.invernada?.nome ?? null,
+          },
+        },
+      })
+    );
 
-    // 2) Últimos logs do usuário (capturam create/update/delete em vários módulos)
+    // logs de atualização do animal
     const logs = await this.prisma.logAcesso.findMany({
-      where: { usuarioId },
+      where: { usuarioId, acao: { startsWith: 'animal_atualizado ' } },
       orderBy: { data: 'desc' },
-      take: 15,
+      take: 8,
       select: { data: true, acao: true },
     });
 
-    const normalizaLog = (acao: string): HistoricoItem => {
-      // animal
-      if (acao.startsWith('animal_criado')) return { tipo: 'log', descricao: acao.replace('animal_criado', '✅ Criou animal'), data: new Date() };
-      if (acao.startsWith('animal_atualizado')) return { tipo: 'log', descricao: acao.replace('animal_atualizado', '✏️ Atualizou animal'), data: new Date() };
-      if (acao.startsWith('animal_excluido')) return { tipo: 'log', descricao: acao.replace('animal_excluido', '🗑️ Excluiu animal'), data: new Date() };
+    for (const log of logs) {
+      const info = this.parseAnimalUpdate(log.acao);
+      if (!info.brinco) continue;
 
-      // lavoura
-      if (acao.startsWith('lavoura_criada')) return { tipo: 'log', descricao: acao.replace('lavoura_criada', '🌱 Criou lavoura'), data: new Date() };
-      if (acao.startsWith('lavoura_atualizada')) return { tipo: 'log', descricao: acao.replace('lavoura_atualizada', '✏️ Atualizou lavoura'), data: new Date() };
-      if (acao.startsWith('lavoura_excluida')) return { tipo: 'log', descricao: acao.replace('lavoura_excluida', '🗑️ Excluiu lavoura'), data: new Date() };
+      const a = await this.prisma.animal.findFirst({
+        where: { brinco: info.brinco, fazendaId },
+        include: { invernada: true },
+      });
+      if (!a) continue;
 
-      // invernada
-      if (acao.startsWith('invernada_criada')) return { tipo: 'log', descricao: acao.replace('invernada_criada', '🌾 Criou invernada'), data: new Date() };
-      if (acao.startsWith('invernada_atualizada')) return { tipo: 'log', descricao: acao.replace('invernada_atualizada', '✏️ Atualizou invernada'), data: new Date() };
-      if (acao.startsWith('invernada_excluida')) return { tipo: 'log', descricao: acao.replace('invernada_excluida', '🗑️ Excluiu invernada'), data: new Date() };
+      historico.push({
+        tipo: 'animal_atualizado',
+        descricao: `Animal ${a.brinco} atualizado`,
+        data: log.data ?? new Date(),
+        meta: {
+          ids: { animalId: a.id },
+          animal: {
+            brinco: a.brinco,
+            sexo: a.sexo,
+            raca: a.raca,
+            idade: a.idade,
+            unidadeIdade: a.unidadeIdade,
+            peso: a.peso,
+            lote: a.lote,
+            invernada: a.invernada?.nome ?? null,
+          },
+          changes: info.changes ?? [],
+        },
+      });
+    }
 
-      // manejo
-      if (acao.startsWith('manejo_criado')) return { tipo: 'log', descricao: acao.replace('manejo_criado', '🧰 Criou manejo'), data: new Date() };
-      if (acao.startsWith('manejo_atualizado')) return { tipo: 'log', descricao: acao.replace('manejo_atualizado', '✏️ Atualizou manejo'), data: new Date() };
-      if (acao.startsWith('manejo_excluido')) return { tipo: 'log', descricao: acao.replace('manejo_excluido', '🗑️ Excluiu manejo'), data: new Date() };
-
-      // compra-insumo
-      if (acao.startsWith('compra_insumo_criada')) return { tipo: 'log', descricao: acao.replace('compra_insumo_criada', '🧾 Criou compra de insumo'), data: new Date() };
-      if (acao.startsWith('compra_insumo_atualizada')) return { tipo: 'log', descricao: acao.replace('compra_insumo_atualizada', '✏️ Atualizou compra de insumo'), data: new Date() };
-      if (acao.startsWith('compra_insumo_excluida')) return { tipo: 'log', descricao: acao.replace('compra_insumo_excluida', '🗑️ Excluiu compra de insumo'), data: new Date() };
-
-      // financeiro
-      if (acao.startsWith('financeiro_criado')) return { tipo: 'log', descricao: acao.replace('financeiro_criado', '💰 Criou lançamento financeiro'), data: new Date() };
-      if (acao.startsWith('financeiro_atualizado')) return { tipo: 'log', descricao: acao.replace('financeiro_atualizado', '✏️ Atualizou lançamento financeiro'), data: new Date() };
-      if (acao.startsWith('financeiro_excluido')) return { tipo: 'log', descricao: acao.replace('financeiro_excluido', '🗑️ Excluiu lançamento financeiro'), data: new Date() };
-
-      // sanidade
-      if (acao.startsWith('sanidade_criada')) return { tipo: 'log', descricao: acao.replace('sanidade_criada', '🩺 Criou sanidade'), data: new Date() };
-      if (acao.startsWith('sanidade_atualizada')) return { tipo: 'log', descricao: acao.replace('sanidade_atualizada', '✏️ Atualizou sanidade'), data: new Date() };
-      if (acao.startsWith('sanidade_excluida')) return { tipo: 'log', descricao: acao.replace('sanidade_excluida', '🗑️ Excluiu sanidade'), data: new Date() };
-
-      // medicamento
-      if (acao.startsWith('medicamento_criado')) return { tipo: 'log', descricao: acao.replace('medicamento_criado', '💊 Criou medicamento'), data: new Date() };
-      if (acao.startsWith('medicamento_atualizado')) return { tipo: 'log', descricao: acao.replace('medicamento_atualizado', '✏️ Atualizou medicamento'), data: new Date() };
-      if (acao.startsWith('medicamento_excluido')) return { tipo: 'log', descricao: acao.replace('medicamento_excluido', '🗑️ Excluiu medicamento'), data: new Date() };
-
-      // genérico
-      return { tipo: 'log', descricao: acao, data: new Date() };
-    };
-
-    const historicoLogs: HistoricoItem[] = logs.map((l) => ({
-      ...normalizaLog(l.acao),
-      data: l.data, // preserva a data real do log
-    }));
-
-    // 3) Mescla, ordena e limita (6 mais recentes)
-    const historico = [...historicoBase, ...historicoLogs]
-      .sort((a, b) => b.data.getTime() - a.data.getTime())
-      .slice(0, 6);
-
-    return historico;
+    historico.sort((a, b) => b.data.getTime() - a.data.getTime());
+    return historico.slice(0, 6);
   }
 
-  // Indicadores (inalterado, só confere acesso)
   async getIndicadores(
     fazendaId: string,
     tipo: 'peso' | 'financeiro',

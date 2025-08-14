@@ -31,15 +31,12 @@ export class AnimalService {
 
   // CREATE
   async create(dto: CreateAnimalDto, usuarioId: string) {
-    // garante acesso à fazenda
     await this.verificarAcessoAFazenda(dto.fazendaId, usuarioId);
 
-    // se veio invernada, garante que é da mesma fazenda
     if (dto.invernadaId) {
       await this.verificarInvernada(dto.invernadaId, dto.fazendaId);
     }
 
-    // Salva peso/lote direto na tabela Animal
     const animal = await this.prisma.animal.create({
       data: {
         brinco: dto.brinco,
@@ -55,7 +52,6 @@ export class AnimalService {
       },
     });
 
-    // histórico de peso (opcional)
     if (
       dto.peso !== undefined &&
       dto.peso !== null &&
@@ -85,7 +81,7 @@ export class AnimalService {
     return animal;
   }
 
-  // LIST (paginada — retorna { data, total })
+  // LIST
   async findAll(usuarioId: string, params: any = {}) {
     const take = Number(params?.take ?? 20);
     const skip = Number(params?.skip ?? 0);
@@ -100,24 +96,9 @@ export class AnimalService {
       ...(search
         ? {
             OR: [
-              {
-                brinco: {
-                  contains: search,
-                  mode: Prisma.QueryMode.insensitive,
-                },
-              },
-              {
-                raca: {
-                  contains: search,
-                  mode: Prisma.QueryMode.insensitive,
-                },
-              },
-              {
-                nome: {
-                  contains: search,
-                  mode: Prisma.QueryMode.insensitive,
-                },
-              },
+              { brinco: { contains: search, mode: Prisma.QueryMode.insensitive } },
+              { raca: { contains: search, mode: Prisma.QueryMode.insensitive } },
+              { nome: { contains: search, mode: Prisma.QueryMode.insensitive } },
             ],
           }
         : {}),
@@ -156,21 +137,18 @@ export class AnimalService {
 
   // UPDATE
   async update(id: string, dto: UpdateAnimalDto, usuarioId: string) {
-    // garante que o animal pertence a uma fazenda do usuário
-    const animal = await this.prisma.animal.findFirst({
+    const atual = await this.prisma.animal.findFirst({
       where: {
         id,
         fazenda: { usuarios: { some: { usuarioId } } },
       },
     });
-    if (!animal) throw new ForbiddenException('Acesso negado');
+    if (!atual) throw new ForbiddenException('Acesso negado');
 
-    // se vier invernada, valida que pertence à mesma fazenda
     if (dto.invernadaId) {
-      await this.verificarInvernada(dto.invernadaId, animal.fazendaId);
+      await this.verificarInvernada(dto.invernadaId, atual.fazendaId);
     }
 
-    // Monta o objeto de update incluindo peso/lote se vierem
     const dataUpdate: Prisma.AnimalUpdateInput = {
       ...(dto.brinco !== undefined ? { brinco: dto.brinco } : {}),
       ...(dto.nome !== undefined ? { nome: dto.nome ?? null } : {}),
@@ -187,13 +165,27 @@ export class AnimalService {
         : {}),
     };
 
+    // monta lista de campos alterados (p/ log)
+    const alterados: string[] = [];
+    const cmp = <T>(k: keyof typeof atual, novo: T | undefined) => {
+      if (novo !== undefined && (atual as any)[k] !== novo) alterados.push(String(k));
+    };
+    cmp('brinco', dto.brinco);
+    cmp('nome', dto.nome);
+    cmp('sexo', dto.sexo);
+    cmp('raca', dto.raca);
+    cmp('idade', dto.idade);
+    cmp('unidadeIdade', dto.unidadeIdade);
+    cmp('lote', dto.lote);
+    cmp('peso', dto.peso);
+    cmp('invernadaId', dto.invernadaId);
+
     const atualizado = await this.prisma.animal.update({
       where: { id },
       data: dataUpdate,
       include: { fazenda: true, invernada: true },
     });
 
-    // novo peso? registra no histórico
     if (
       dto.peso !== undefined &&
       dto.peso !== null &&
@@ -215,9 +207,10 @@ export class AnimalService {
       );
     }
 
+    // log com changes=...
     await this.safeLog(
       usuarioId,
-      `animal_atualizado brinco=${atualizado.brinco} id=${atualizado.id} fazenda=${atualizado.fazendaId}`,
+      `animal_atualizado brinco=${atualizado.brinco} id=${atualizado.id} fazenda=${atualizado.fazendaId} changes=${alterados.join(',')}`,
     );
 
     return atualizado;
@@ -256,9 +249,7 @@ export class AnimalService {
   // EXPORT CSV
   async exportCSV(usuarioId: string) {
     const animais = await this.prisma.animal.findMany({
-      where: {
-        fazenda: { usuarios: { some: { usuarioId } } },
-      },
+      where: { fazenda: { usuarios: { some: { usuarioId } } } },
       include: { fazenda: true, invernada: true },
     });
 
@@ -272,9 +263,7 @@ export class AnimalService {
   // EXPORT PDF
   async exportPDF(usuarioId: string) {
     const animais = await this.prisma.animal.findMany({
-      where: {
-        fazenda: { usuarios: { some: { usuarioId } } },
-      },
+      where: { fazenda: { usuarios: { some: { usuarioId } } } },
       include: { fazenda: true, invernada: true },
     });
 
@@ -292,9 +281,7 @@ export class AnimalService {
         .text(`Sexo: ${animal.sexo ?? 'N/A'}`)
         .text(`Raça: ${animal.raca ?? 'N/A'}`)
         .text(
-          `Idade: ${
-            animal.idade ? `${animal.idade} ${animal.unidadeIdade}` : 'N/A'
-          }`,
+          `Idade: ${animal.idade ? `${animal.idade} ${animal.unidadeIdade}` : 'N/A'}`
         )
         .text(`Peso: ${animal.peso ?? 'N/A'}`)
         .text(`Lote: ${animal.lote ?? 'N/A'}`)
@@ -317,12 +304,8 @@ export class AnimalService {
   // HELPERS
   private async verificarAcessoAFazenda(fazendaId: string, usuarioId: string) {
     const fazenda = await this.prisma.fazenda.findFirst({
-      where: {
-        id: fazendaId,
-        usuarios: { some: { usuarioId } },
-      },
+      where: { id: fazendaId, usuarios: { some: { usuarioId } } },
     });
-
     if (!fazenda) throw new ForbiddenException('Acesso negado à fazenda');
   }
 
@@ -330,8 +313,6 @@ export class AnimalService {
     const invernada = await this.prisma.invernada.findFirst({
       where: { id: invernadaId, fazendaId },
     });
-
-    if (!invernada)
-      throw new ForbiddenException('Invernada não encontrada nessa fazenda');
+    if (!invernada) throw new ForbiddenException('Invernada não encontrada nessa fazenda');
   }
 }
