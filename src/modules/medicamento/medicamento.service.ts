@@ -1,3 +1,4 @@
+// src/modules/medicamento/medicamento.service.ts
 import {
   Injectable,
   NotFoundException,
@@ -33,6 +34,24 @@ function toDateOrNull(v: unknown): Date | null {
   if (v == null || v === '') return null;
   const d = new Date(v as any);
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// helper simples p/ montar lista de campos alterados
+function diffChanges<T extends Record<string, any>>(
+  before: Partial<T>,
+  proposed: Partial<T>,
+  keys: (keyof T)[]
+): string[] {
+  const out: string[] = [];
+  for (const k of keys) {
+    if (Object.prototype.hasOwnProperty.call(proposed, k)) {
+      const newVal = (proposed as any)[k];
+      const oldVal = (before as any)[k];
+      // Object.is evita falsos positivos entre -0/0 e NaN
+      if (!Object.is(newVal, oldVal)) out.push(String(k));
+    }
+  }
+  return out;
 }
 
 @Injectable()
@@ -71,17 +90,14 @@ export class MedicamentoService {
     let prox = toDateOrNull(dto.proximaAplicacao);
     const lembreteAtivo = !!dto.lembreteAtivo;
 
-    // regra: lembrete sem data -> desativa
+    // lembrete sem data -> desativa (ou lance erro se preferir)
     if (lembreteAtivo && !prox) {
-      // opcional: lançar erro em vez de desativar
-      // throw new BadRequestException('Para ativar lembrete, informe proximaAplicacao');
-      // comportamento adotado: desativa
       this.logger.warn(
         'lembreteAtivo=true, mas proximaAplicacao ausente. Lembrete será desativado.',
       );
     }
 
-    // regra opcional: proximaAplicacao não pode ser antes da data do medicamento
+    // proximaAplicacao não pode ser antes da data do medicamento
     if (prox && prox < dataMedic) {
       throw new BadRequestException(
         'A próxima aplicação não pode ser anterior à data do medicamento',
@@ -105,7 +121,19 @@ export class MedicamentoService {
 
     await this.safeLog(
       usuarioId,
-      `medicamento_criado: animal=${animal.brinco} nome=${novo.nome} data=${novo.data.toISOString()}`,
+      [
+        `medicamento_criado`,
+        `id=${novo.id}`,
+        `animal=${animal.id}`,
+        `brinco=${animal.brinco ?? ''}`,
+        `fazenda=${animal.fazendaId}`,
+        `nome=${novo.nome}`,
+        `data=${novo.data.toISOString()}`,
+        `proxima=${novo.proximaAplicacao ? novo.proximaAplicacao.toISOString() : ''}`,
+        `lembreteAtivo=${novo.lembreteAtivo}`,
+        novo.viaAplicacao ? `via=${novo.viaAplicacao}` : '',
+        novo.dosagem ? `dosagem=${novo.dosagem}` : '',
+      ].filter(Boolean).join(' ')
     );
 
     return novo;
@@ -117,9 +145,9 @@ export class MedicamentoService {
     return this.prisma.medicamento.findMany({
       where: { animalId },
       orderBy: [
-        // primeiro quem tem lembrete e mais próximo, depois pela data do medicamento
-        { proximaAplicacao: 'asc' as const },
-        { data: 'desc' as const },
+        // primeiro quem tem lembrete mais próximo, depois pela data do medicamento
+        { proximaAplicacao: 'asc' },
+        { data: 'desc' },
       ],
     });
   }
@@ -151,16 +179,13 @@ export class MedicamentoService {
     const novaProx =
       dto.proximaAplicacao !== undefined ? toDateOrNull(dto.proximaAplicacao) : undefined;
 
-    // regra opcional: proximaAplicacao não pode ser anterior à data
     if (novaProx && (novaData ?? current.data) && novaProx < (novaData ?? current.data)) {
       throw new BadRequestException(
         'A próxima aplicação não pode ser anterior à data do medicamento',
       );
     }
 
-    // lógica de lembrete:
-    // - Se lembreteAtivo=false => zera notificacaoId e mantém proximaAplicacao como veio (ou nula)
-    // - Se lembreteAtivo=true mas sem proximaAplicacao (novaProx===null/undefined e current.proximaAplicacao null) => força false
+    // lembrete
     let setLembreteAtivo: boolean | undefined = undefined;
     let setNotificacaoId: string | null | undefined = undefined;
 
@@ -169,7 +194,7 @@ export class MedicamentoService {
         setLembreteAtivo = false;
         setNotificacaoId = null; // desvincula
       } else {
-        // true: só mantém se houver (novaProx ?? current.proximaAplicacao)
+        // true: só ativa se existir uma próxima (nova ou atual)
         const validaProx = novaProx !== undefined ? novaProx : current.proximaAplicacao;
         setLembreteAtivo = !!validaProx;
         if (!validaProx) {
@@ -193,6 +218,30 @@ export class MedicamentoService {
       ...(setNotificacaoId !== undefined ? { notificacaoId: setNotificacaoId } : {}),
     };
 
+    // proposto (só chaves presentes em dto / calculadas)
+    const proposed: Partial<{
+      nome: string | null;
+      dosagem: string | null;
+      viaAplicacao: string | null;
+      observacoes: string | null;
+      data: Date | null;
+      proximaAplicacao: Date | null;
+      lembreteAtivo: boolean;
+    }> = {};
+    if (dto.nome !== undefined) proposed.nome = dto.nome ?? null;
+    if (dto.dosagem !== undefined) proposed.dosagem = dto.dosagem ?? null;
+    if (dto.viaAplicacao !== undefined) proposed.viaAplicacao = dto.viaAplicacao ?? null;
+    if (dto.observacoes !== undefined) proposed.observacoes = dto.observacoes ?? null;
+    if (novaData !== undefined) proposed.data = novaData ?? null;
+    if (novaProx !== undefined) proposed.proximaAplicacao = novaProx ?? null;
+    if (setLembreteAtivo !== undefined) proposed.lembreteAtivo = setLembreteAtivo;
+
+    const alterados = diffChanges(
+      current,
+      proposed,
+      ['nome', 'dosagem', 'viaAplicacao', 'observacoes', 'data', 'proximaAplicacao', 'lembreteAtivo']
+    );
+
     const updated = await this.prisma.medicamento.update({
       where: { id },
       data: dataUpdate,
@@ -201,7 +250,13 @@ export class MedicamentoService {
 
     await this.safeLog(
       usuarioId,
-      `medicamento_atualizado: animal=${updated.animal?.brinco ?? current.animal.brinco} nome=${updated.nome}`,
+      [
+        `medicamento_atualizado`,
+        `id=${id}`,
+        `animal=${updated.animal?.id ?? current.animal.id}`,
+        `fazenda=${updated.animal?.fazendaId ?? current.animal.fazendaId}`,
+        alterados.length ? `changes=${alterados.join(',')}` : `changes=`,
+      ].join(' ')
     );
 
     return updated;
@@ -215,7 +270,7 @@ export class MedicamentoService {
 
     await this.safeLog(
       usuarioId,
-      `medicamento_excluido: animal=${med.animal?.brinco ?? ''} nome=${med.nome}`,
+      `medicamento_excluido id=${id} animal=${med.animal.id} fazenda=${med.animal.fazendaId}`,
     );
 
     return { message: 'Medicamento removido com sucesso' };

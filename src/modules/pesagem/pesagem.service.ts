@@ -9,6 +9,7 @@ import { PrismaService } from '../../prisma.service';
 import { CreatePesagemDto } from './dto/create-pesagem.dto';
 import { UpdatePesagemDto } from './dto/update-pesagem.dto';
 import { Prisma } from '@prisma/client';
+import { buildChanges, stringifyChanges } from '../../common/utils/change-log';
 
 @Injectable()
 export class PesagemService {
@@ -53,8 +54,8 @@ export class PesagemService {
   async create(dto: CreatePesagemDto, usuarioId: string) {
     const animal = await this.assertAcessoAoAnimal(dto.animalId, usuarioId);
 
-    const data = new Date(dto.data);
-    if (Number.isNaN(data.getTime())) {
+    const dataMedida = new Date(dto.data);
+    if (Number.isNaN(dataMedida.getTime())) {
       throw new BadRequestException('Data inválida');
     }
 
@@ -62,15 +63,16 @@ export class PesagemService {
       data: {
         animalId: animal.id,
         fazendaId: animal.fazendaId,
-        data,
+        data: dataMedida,
         pesoKg: Number(dto.pesoKg),
       },
       include: { animal: true },
     });
 
+    // log padrão
     await this.safeLog(
       usuarioId,
-      `pesagem_criada: animal=${animal.brinco} peso=${nova.pesoKg}kg em ${data.toISOString()}`,
+      `pesagem_criada id=${nova.id} animal=${animal.id} brinco=${animal.brinco ?? ''} fazenda=${animal.fazendaId} pesoKg=${nova.pesoKg} data=${dataMedida.toISOString()}`,
     );
 
     return nova;
@@ -124,14 +126,24 @@ export class PesagemService {
     const current = await this.assertAcessoAPesagem(id, usuarioId);
 
     const dataUpdate: Prisma.PesagemUpdateInput = {};
+    let parsedDate: Date | undefined;
+
     if (dto.data !== undefined) {
       const d = new Date(dto.data);
       if (Number.isNaN(d.getTime())) throw new BadRequestException('Data inválida');
+      parsedDate = d;
       dataUpdate.data = d;
     }
     if (dto.pesoKg !== undefined) {
       dataUpdate.pesoKg = Number(dto.pesoKg);
     }
+
+    // changes (data, pesoKg)
+    const proposed: Partial<{ data: Date; pesoKg: number }> = {};
+    if (parsedDate !== undefined) proposed.data = parsedDate;
+    if (dto.pesoKg !== undefined) proposed.pesoKg = Number(dto.pesoKg);
+
+    const alterados = buildChanges(current as any, proposed, ['data', 'pesoKg'] as any);
 
     const updated = await this.prisma.pesagem.update({
       where: { id },
@@ -141,7 +153,7 @@ export class PesagemService {
 
     await this.safeLog(
       usuarioId,
-      `pesagem_atualizada: animal=${updated.animal?.brinco ?? current.animal.brinco} peso=${updated.pesoKg}kg`,
+      `pesagem_atualizada id=${id} animal=${current.animal.id} fazenda=${current.animal.fazendaId} changes=${stringifyChanges(alterados)}`,
     );
 
     return updated;
@@ -155,7 +167,7 @@ export class PesagemService {
 
     await this.safeLog(
       usuarioId,
-      `pesagem_excluida: animal=${pes.animal?.brinco ?? ''} peso=${pes.pesoKg}kg`,
+      `pesagem_excluida id=${id} animal=${pes.animal.id} fazenda=${pes.animal.fazendaId}`,
     );
 
     return { message: 'Pesagem removida com sucesso' };

@@ -12,6 +12,7 @@ import { Parser } from 'json2csv';
 import * as PDFDocument from 'pdfkit';
 import * as streamBuffers from 'stream-buffers';
 import { Prisma } from '@prisma/client';
+import { extractChanges } from 'src/common/utils/extract-changes';
 
 @Injectable()
 export class AnimalService {
@@ -29,10 +30,29 @@ export class AnimalService {
     }
   }
 
+  // Mapeia campos -> rótulos "bonitos" para aparecer no dashboard
+  private readonly fieldLabels: Record<string, string> = {
+    brinco: 'Brinco',
+    nome: 'Nome',
+    sexo: 'Sexo',
+    raca: 'Raça',
+    idade: 'Idade',
+    unidadeIdade: 'Unidade de idade',
+    lote: 'Lote',
+    peso: 'Peso',
+    invernadaId: 'Invernada',
+  };
+
+  private toLabeledChanges(keys: string[]): string[] {
+    return keys.map((k) => this.fieldLabels[k] ?? k);
+  }
+
   // CREATE
   async create(dto: CreateAnimalDto, usuarioId: string) {
+    // acesso
     await this.verificarAcessoAFazenda(dto.fazendaId, usuarioId);
 
+    // invernada (quando enviada) tem que pertencer à mesma fazenda
     if (dto.invernadaId) {
       await this.verificarInvernada(dto.invernadaId, dto.fazendaId);
     }
@@ -52,25 +72,26 @@ export class AnimalService {
       },
     });
 
-    if (
-      dto.peso !== undefined &&
-      dto.peso !== null &&
-      !Number.isNaN(Number(dto.peso))
-    ) {
-      await this.prisma.pesagem.create({
-        data: {
-          animalId: animal.id,
-          fazendaId: dto.fazendaId,
-          data: new Date(),
-          pesoKg: Number(dto.peso),
-        },
-      });
-      await this.safeLog(
-        usuarioId,
-        `pesagem_registrada animal=${animal.id} brinco=${animal.brinco} pesoKg=${Number(
-          dto.peso,
-        )} fazenda=${dto.fazendaId}`,
-      );
+    // se veio peso, cria histórico de pesagem
+    if (dto.peso !== undefined && dto.peso !== null && !Number.isNaN(Number(dto.peso))) {
+      try {
+        await this.prisma.pesagem.create({
+          data: {
+            animalId: animal.id,
+            fazendaId: dto.fazendaId,
+            data: new Date(),
+            pesoKg: Number(dto.peso),
+          },
+        });
+        await this.safeLog(
+          usuarioId,
+          `pesagem_registrada animal=${animal.id} brinco=${animal.brinco} pesoKg=${Number(
+            dto.peso,
+          )} fazenda=${dto.fazendaId}`,
+        );
+      } catch (e) {
+        this.logger.warn(`Falha ao registrar pesagem inicial do animal ${animal.id}: ${String(e)}`);
+      }
     }
 
     await this.safeLog(
@@ -165,20 +186,9 @@ export class AnimalService {
         : {}),
     };
 
-    // monta lista de campos alterados (p/ log)
-    const alterados: string[] = [];
-    const cmp = <T>(k: keyof typeof atual, novo: T | undefined) => {
-      if (novo !== undefined && (atual as any)[k] !== novo) alterados.push(String(k));
-    };
-    cmp('brinco', dto.brinco);
-    cmp('nome', dto.nome);
-    cmp('sexo', dto.sexo);
-    cmp('raca', dto.raca);
-    cmp('idade', dto.idade);
-    cmp('unidadeIdade', dto.unidadeIdade);
-    cmp('lote', dto.lote);
-    cmp('peso', dto.peso);
-    cmp('invernadaId', dto.invernadaId);
+    // changes (com rótulo bonito)
+    const rawChanges = extractChanges<typeof atual>(atual, dto);
+    const labeled = this.toLabeledChanges(rawChanges);
 
     const atualizado = await this.prisma.animal.update({
       where: { id },
@@ -186,31 +196,32 @@ export class AnimalService {
       include: { fazenda: true, invernada: true },
     });
 
-    if (
-      dto.peso !== undefined &&
-      dto.peso !== null &&
-      !Number.isNaN(Number(dto.peso))
-    ) {
-      await this.prisma.pesagem.create({
-        data: {
-          animalId: id,
-          fazendaId: atualizado.fazendaId,
-          data: new Date(),
-          pesoKg: Number(dto.peso),
-        },
-      });
-      await this.safeLog(
-        usuarioId,
-        `pesagem_registrada animal=${id} brinco=${atualizado.brinco} pesoKg=${Number(
-          dto.peso,
-        )} fazenda=${atualizado.fazendaId}`,
-      );
+    // se veio novo peso, registra histórico de pesagem
+    if (dto.peso !== undefined && dto.peso !== null && !Number.isNaN(Number(dto.peso))) {
+      try {
+        await this.prisma.pesagem.create({
+          data: {
+            animalId: id,
+            fazendaId: atualizado.fazendaId,
+            data: new Date(),
+            pesoKg: Number(dto.peso),
+          },
+        });
+        await this.safeLog(
+          usuarioId,
+          `pesagem_registrada animal=${id} brinco=${atualizado.brinco} pesoKg=${Number(
+            dto.peso,
+          )} fazenda=${atualizado.fazendaId}`,
+        );
+      } catch (e) {
+        this.logger.warn(`Falha ao registrar pesagem no update do animal ${id}: ${String(e)}`);
+      }
     }
 
     // log com changes=...
     await this.safeLog(
       usuarioId,
-      `animal_atualizado brinco=${atualizado.brinco} id=${atualizado.id} fazenda=${atualizado.fazendaId} changes=${alterados.join(',')}`,
+      `animal_atualizado brinco=${atualizado.brinco} id=${atualizado.id} fazenda=${atualizado.fazendaId} changes=${labeled.join(',')}`,
     );
 
     return atualizado;
@@ -228,13 +239,14 @@ export class AnimalService {
 
     if (!animal) throw new ForbiddenException('Acesso negado');
 
+    // apaga dependências primeiro (ordem segura)
     await this.prisma.$transaction([
-      this.prisma.pesagem.deleteMany({ where: { animalId: id } }),
-      this.prisma.manejo.deleteMany({ where: { animalId: id } }),
-      this.prisma.ocorrencia.deleteMany({ where: { animalId: id } }),
-      this.prisma.sanidade.deleteMany({ where: { animalId: id } }),
-      this.prisma.medicamento.deleteMany({ where: { animalId: id } }),
       this.prisma.leituraDispositivo.deleteMany({ where: { animalId: id } }),
+      this.prisma.medicamento.deleteMany({ where: { animalId: id } }),
+      this.prisma.sanidade.deleteMany({ where: { animalId: id } }),
+      this.prisma.manejo.deleteMany({ where: { animalId: id } }),
+      this.prisma.pesagem.deleteMany({ where: { animalId: id } }),
+      this.prisma.ocorrencia.deleteMany({ where: { animalId: id } }),
       this.prisma.animal.delete({ where: { id } }),
     ]);
 
