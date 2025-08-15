@@ -25,28 +25,32 @@ export class AuthController {
   // OAuth Web – Google (Passport)
   @UseGuards(GoogleAuthGuard)
   @Get('google')
-  async googleAuth() {}
+  async googleAuth() {
+    // Deixa o Passport redirecionar pro Google
+  }
 
   @UseGuards(GoogleAuthGuard)
   @Get('google/redirect')
   async googleAuthRedirect(@Req() req: Request, @Res() res: Response) {
     const data = await this.authService.googleLogin((req as any).user);
-    if (data?.token) {
-      return res.redirect(`https://www.agrototalapp.com.br/auth/success?token=${data.token}`);
+    const token = data?.token;
+
+    const state = (req.query?.state as string) || '';
+    const appScheme = process.env.APP_SCHEME || 'agrototal';
+
+    // Fluxo mobile: volta pro app com o token via deep link
+    if (state === 'mobile') {
+      if (token) {
+        return res.redirect(`${appScheme}://auth/success?token=${encodeURIComponent(token)}`);
+      }
+      return res.redirect(`${appScheme}://auth/error`);
+    }
+
+    // Fluxo web (como já estava)
+    if (token) {
+      return res.redirect(`https://www.agrototalapp.com.br/auth/success?token=${encodeURIComponent(token)}`);
     }
     return res.redirect('https://www.agrototalapp.com.br/auth/error');
-  }
-
-  // OAuth Mobile – Google (ID Token vindo do app)
-  @Post('google/token')
-  async googleToken(@Body() body: { idToken: string }) {
-    return this.authService.loginOrRegisterWithGoogleIdToken(body.idToken);
-  }
-
-  // OAuth Mobile – Apple (Identity Token vindo do app)
-  @Post('apple/token')
-  async appleToken(@Body() body: { identityToken: string }) {
-    return this.authService.loginOrRegisterWithAppleIdToken(body.identityToken);
   }
 
   // Esqueci / Reset
