@@ -10,20 +10,34 @@ import { MailerService } from 'src/common/mailer/mailer.service';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { RegisterAuthDto, ResetPasswordDto } from './dto';
-import { OAuth2Client } from 'google-auth-library';
-import * as jose from 'jose';
+
+type GoogleIdTokenPayload = {
+  iss: string;
+  sub: string;        // googleId
+  email?: string;
+  email_verified?: boolean;
+  name?: string;
+  picture?: string;
+  aud?: string | string[];
+};
+
+type AppleTokenPayload = {
+  iss: string;
+  sub: string;        // appleId
+  email?: string;
+  email_verified?: boolean | string;
+  aud?: string;
+};
 
 @Injectable()
 export class AuthService {
-  private google = new OAuth2Client();
-
   constructor(
     private readonly usuarioService: UsuarioService,
     private readonly jwtService: JwtService,
     private readonly mailerService: MailerService,
   ) {}
 
-  // ========= Registro/Login (email/senha) =========
+  // ========== Email/senha ==========
   async register(dto: RegisterAuthDto) {
     const userExists = await this.usuarioService.findByEmail(dto.email);
     if (userExists) throw new BadRequestException('E-mail já cadastrado');
@@ -31,6 +45,7 @@ export class AuthService {
     const user = await this.usuarioService.create(dto);
     const payload = { sub: user.id, email: user.email };
     const token = this.jwtService.sign(payload);
+
     return { token, user };
   }
 
@@ -40,20 +55,40 @@ export class AuthService {
     return { token, user };
   }
 
-  // ========= Fluxo Web (Passport Google) =========
+  // ========== Google OAuth (passport) ==========
   async googleLogin(googleUser: any) {
     if (!googleUser) throw new UnauthorizedException();
 
-    let user = await this.usuarioService.findByEmail(googleUser.email);
+    // Esperado do Passport Google Strategy:
+    // { email, nome|name, id (googleId), picture? }
+    const email = googleUser.email;
+    const googleId = googleUser.id;
+
+    if (!email || !googleId) {
+      throw new UnauthorizedException('Dados do Google incompletos');
+    }
+
+    let user = await this.usuarioService.findByEmail(email);
+
     if (!user) {
+      // Cria novo usuário
       user = await this.usuarioService.create({
         nome: googleUser.nome || googleUser.name || 'Usuário',
-        email: googleUser.email,
-        senha: uuidv4(),
-        googleId: googleUser.sub ?? undefined,
-      } as any);
-    } else if (!user.googleId && googleUser.sub) {
-      user = await this.usuarioService.update(user.id, { googleId: googleUser.sub } as any);
+        email,
+        senha: uuidv4(), // senha aleatória (não usada)
+      });
+      await this.usuarioService.update(user.id, {
+        googleId,
+        fotoUrl: googleUser.picture ?? undefined,
+        ultimoLogin: new Date(),
+      });
+    } else {
+      // Vincula/atualiza conta Google
+      await this.usuarioService.update(user.id, {
+        googleId: user.googleId ?? googleId, // não sobrescreve se já tem
+        fotoUrl: googleUser.picture ?? user.fotoUrl ?? undefined,
+        ultimoLogin: new Date(),
+      });
     }
 
     const payload = { sub: user.id, email: user.email };
@@ -61,107 +96,116 @@ export class AuthService {
     return { token, user };
   }
 
-  // ========= Fluxo Mobile: Google (ID Token) =========
+  // ========== Google ID Token (App) ==========
   async loginOrRegisterWithGoogleIdToken(idToken: string) {
-    if (!idToken) throw new BadRequestException('idToken é obrigatório');
+    if (!idToken) throw new BadRequestException('idToken ausente');
 
-    const audience = [
-      process.env.GOOGLE_ANDROID_CLIENT_ID,
-      process.env.GOOGLE_IOS_CLIENT_ID,
-      process.env.GOOGLE_EXPO_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_ID, // web (opcional)
-    ].filter(Boolean) as string[];
+    const { jwtVerify, createRemoteJWKSet } = await import('jose');
 
-    const ticket = await this.google.verifyIdToken({ idToken, audience });
-    const payload = ticket.getPayload();
-    if (!payload?.sub) throw new UnauthorizedException('Token do Google inválido');
+    const audience = process.env.GOOGLE_CLIENT_ID; // o mesmo usado no backend web
+    if (!audience) throw new Error('GOOGLE_CLIENT_ID não configurado');
 
-    const googleId = payload.sub;
-    const email = payload.email ?? null;
-    const nome = payload.name ?? 'Usuário Google';
-    const picture = payload.picture ?? null;
+    // JWKS do Google
+    const JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
+    const { payload } = await jwtVerify(idToken, JWKS, {
+      issuer: ['https://accounts.google.com', 'accounts.google.com'],
+      audience,
+    });
 
-    let user = email ? await this.usuarioService.findByEmail(email) : null;
-    if (!user) user = await this.usuarioService.findByGoogleId(googleId);
+    const p = payload as GoogleIdTokenPayload;
+    if (!p.sub) throw new UnauthorizedException('Token do Google inválido');
+
+    const email = p.email;
+    const googleId = p.sub;
+
+    if (!email) {
+      throw new UnauthorizedException('Google não retornou e-mail verificado');
+    }
+
+    let user = await this.usuarioService.findByEmail(email);
 
     if (!user) {
       user = await this.usuarioService.create({
-        nome,
-        email: email ?? `google-${googleId}@noemail.local`,
+        nome: p.name || 'Usuário',
+        email,
         senha: uuidv4(),
-        googleId,
-        fotoUrl: picture,
-        status: 'ativo',
-      } as any);
-    } else {
-      user = await this.usuarioService.update(user.id, {
-        googleId: user.googleId ?? googleId,
-        fotoUrl: user.fotoUrl ?? picture,
-        status: user.status ?? 'ativo',
-      } as any);
-    }
-
-    const token = this.jwtService.sign({ sub: user.id, email: user.email });
-    return { token, user };
-  }
-
-  // ========= Fluxo Mobile: Apple (Identity Token) =========
-  async loginOrRegisterWithAppleIdToken(identityToken: string) {
-    if (!identityToken) throw new BadRequestException('identityToken é obrigatório');
-
-    const JWKS = jose.createRemoteJWKSet(new URL('https://appleid.apple.com/auth/keys'));
-    let verified: jose.JWTVerifyResult;
-    try {
-      verified = await jose.jwtVerify(identityToken, JWKS, {
-        issuer: 'https://appleid.apple.com',
-        audience: process.env.APPLE_AUDIENCE, // bundleId do app
       });
-    } catch {
-      throw new UnauthorizedException('Token da Apple inválido');
-    }
-
-    const claims = verified.payload as any;
-    const appleId = claims.sub as string;
-    const email = (claims.email as string | undefined) ?? null;
-    const nome = 'Usuário Apple';
-
-    let user = email ? await this.usuarioService.findByEmail(email) : null;
-    if (!user) user = await this.usuarioService.findByAppleId(appleId);
-
-    if (!user) {
-      user = await this.usuarioService.create({
-        nome: email ?? nome,
-        email: email ?? `apple-${appleId}@noemail.local`,
-        senha: uuidv4(),
-        appleId,
-        status: 'ativo',
-      } as any);
+      await this.usuarioService.update(user.id, {
+        googleId,
+        fotoUrl: (payload as any).picture ?? undefined,
+        ultimoLogin: new Date(),
+      });
     } else {
-      user = await this.usuarioService.update(user.id, {
-        appleId: user.appleId ?? appleId,
-        status: user.status ?? 'ativo',
-      } as any);
+      await this.usuarioService.update(user.id, {
+        googleId: user.googleId ?? googleId,
+        fotoUrl: (payload as any).picture ?? user.fotoUrl ?? undefined,
+        ultimoLogin: new Date(),
+      });
     }
 
     const token = this.jwtService.sign({ sub: user.id, email: user.email });
     return { token, user };
   }
 
-  // ========= Esqueci/Reset de Senha =========
+  // ========== Apple Identity Token (App) ==========
+  async loginOrRegisterWithAppleIdToken(identityToken: string) {
+    if (!identityToken) throw new BadRequestException('identityToken ausente');
+
+    const { jwtVerify, createRemoteJWKSet } = await import('jose');
+
+    const audience = process.env.APPLE_CLIENT_ID; // ex.: bundle id ou service id
+    if (!audience) throw new Error('APPLE_CLIENT_ID não configurado');
+
+    const JWKS = createRemoteJWKSet(new URL('https://appleid.apple.com/auth/keys'));
+    const { payload } = await jwtVerify(identityToken, JWKS, {
+      issuer: 'https://appleid.apple.com',
+      audience,
+    });
+
+    const p = payload as AppleTokenPayload;
+    if (!p.sub) throw new UnauthorizedException('Token da Apple inválido');
+
+    const appleId = p.sub;
+    const email = p.email; // a Apple pode não retornar sempre o email
+
+    let user = email ? await this.usuarioService.findByEmail(email) : null;
+
+    if (!user) {
+      // Sem email verificado, criamos com identificador Apple e e-mail opcional
+      user = await this.usuarioService.create({
+        nome: 'Usuário Apple',
+        email: email ?? `${appleId}@privaterelay.appleid.com`, // fallback
+        senha: uuidv4(),
+      });
+      await this.usuarioService.update(user.id, {
+        appleId,
+        ultimoLogin: new Date(),
+      });
+    } else {
+      await this.usuarioService.update(user.id, {
+        appleId: user.appleId ?? appleId,
+        ultimoLogin: new Date(),
+      });
+    }
+
+    const token = this.jwtService.sign({ sub: user.id, email: user.email });
+    return { token, user };
+  }
+
+  // ========== Esqueci/Reset ==========
   async forgotPassword(email: string) {
     const user = await this.usuarioService.findByEmail(email);
     if (!user) throw new BadRequestException('E-mail não cadastrado');
 
     const token = uuidv4();
-    const expires = new Date(Date.now() + 1000 * 60 * 60); // 1h
+    const expires = new Date(Date.now() + 60 * 60 * 1000); // 1h
 
     await this.usuarioService.update(user.id, {
       resetToken: token,
-      resetTokenExpires: expires as any,
-    } as any);
+      resetTokenExpires: expires,
+    });
 
     const url = `https://www.agrototalapp.com.br/reset?token=${token}`;
-
     await this.mailerService.send({
       to: user.email,
       subject: 'Recuperação de senha',
@@ -174,7 +218,7 @@ export class AuthService {
 
   async resetPassword(dto: ResetPasswordDto) {
     const user = await this.usuarioService.findByResetToken(dto.token);
-    if (!user || user.resetTokenExpires < new Date()) {
+    if (!user || (user.resetTokenExpires && user.resetTokenExpires < new Date())) {
       throw new BadRequestException('Token inválido ou expirado');
     }
 
@@ -183,18 +227,13 @@ export class AuthService {
       senha: senhaCriptografada,
       resetToken: null,
       resetTokenExpires: null,
-    } as any);
+    });
 
     return { message: 'Senha redefinida com sucesso.' };
   }
 
-  // ========= Validação local (para strategy local) =========
-  async validateUser(email: string, senha: string) {
-    const user = await this.usuarioService.findByEmail(email);
-    if (!user) return null;
-    const ok = await bcrypt.compare(senha, user.senha);
-    if (!ok) return null;
-    const { senha: _pass, ...safe } = user;
-    return safe;
+  // Helper (se quiser expor no futuro)
+  issueTokenForUser(user: { id: string; email: string }) {
+    return this.jwtService.sign({ sub: user.id, email: user.email });
   }
 }

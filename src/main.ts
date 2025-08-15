@@ -3,23 +3,19 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
-
-// ✅ interop seguro para Node 22 (CJS/ESM)
 import helmet from 'helmet';
 import compression from 'compression';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
-    // logger: ['error', 'warn', 'log'],
-  });
+  const app = await NestFactory.create(AppModule);
 
-  // CORS (Render + seu domínio + localhost/Expo)
+  // CORS (Render + domínio + localhost/Expo)
   app.enableCors({
     origin: [
-      /localhost:\d+$/,               // dev local
-      /\.onrender\.com$/,             // Render
-      /\.agrototalapp\.com\.br$/,     // seu domínio
-      'exp://127.0.0.1:19000',        // Expo
+      /localhost:\d+$/,
+      /\.onrender\.com$/,
+      /\.agrototalapp\.com\.br$/,
+      'exp://127.0.0.1:19000',
       'http://127.0.0.1:19006',
       'http://localhost:19006',
     ],
@@ -50,25 +46,22 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 
-  // Confia no proxy (Render) para IPs reais
+  // Proxy (Render) para IP real
   app.getHttpAdapter().getInstance().set('trust proxy', true);
 
-  // Graceful shutdown (sinais do container)
-  const onSignal = async (signal: string) => {
+  // Sobe servidor
+  const server = await app.listen(process.env.PORT || 3333);
+
+  // Graceful shutdown
+  const shutdown = async () => {
     try {
-      // para de aceitar novas conexões e fecha Nest
+      server.close?.();
       await app.close();
-      const server = app.getHttpServer();
-      server?.close?.();
     } finally {
       process.exit(0);
     }
   };
-  process.once('SIGINT', () => onSignal('SIGINT'));
-  process.once('SIGTERM', () => onSignal('SIGTERM'));
-
-  // Sobe o HTTP server
-  await app.listen(process.env.PORT || 3333);
+  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', shutdown);
 }
-
 bootstrap();

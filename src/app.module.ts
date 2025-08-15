@@ -22,6 +22,7 @@ import { ManejoModule } from './modules/manejo/manejo.module';
 import { MarcaModeloModule } from './modules/modelo-dispositivo/marca-modelo.module';
 import { PesagemModule } from './modules/pesagem/pesagem.module';
 import { SanidadeModule } from './modules/sanidade/sanidade.module';
+import { HealthController } from './health/health.controller';
 
 @Module({
   imports: [
@@ -69,7 +70,7 @@ import { SanidadeModule } from './modules/sanidade/sanidade.module';
       }),
     }),
   ],
-  controllers: [],
+  controllers: [HealthController],
   providers: [PrismaService],
 })
 export class AppModule {}

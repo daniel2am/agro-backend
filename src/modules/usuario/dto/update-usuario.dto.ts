@@ -1,37 +1,42 @@
-import { IsEmail, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+// src/modules/usuario/dto/update-usuario.dto.ts
+import { IsEmail, IsOptional, IsString, IsBoolean, IsISO8601, IsEnum } from 'class-validator';
 import { TipoUsuario } from '@prisma/client';
 
 export class UpdateUsuarioDto {
-  @IsOptional()
-  @IsString()
+  @IsOptional() @IsString()
   nome?: string;
 
-  @IsOptional()
-  @IsEmail()
+  @IsOptional() @IsEmail()
   email?: string;
 
-  @IsOptional()
-  @MinLength(6)
+  @IsOptional() @IsString()
   senha?: string;
 
-  @IsOptional()
-  @IsString()
-  googleId?: string | null;
-
-  @IsOptional()
-  @IsString()
-  appleId?: string | null;
-
-  // recuperação de senha
-  resetToken?: string | null;
-  resetTokenExpires?: Date | null;
-  status?: string;
-
-  @IsOptional()
-  @IsString()
+  @IsOptional() @IsString()
   fotoUrl?: string;
 
-  @IsOptional()
-  @IsEnum(TipoUsuario)
+  @IsOptional() @IsString()
+  status?: string; // "ativo" | "inativo", etc.
+
+  // ✅ agora é enum de verdade
+  @IsOptional() @IsEnum(TipoUsuario)
   tipo?: TipoUsuario;
+
+  @IsOptional() @IsString()
+  googleId?: string | null;
+
+  @IsOptional() @IsString()
+  appleId?: string | null;
+
+  @IsOptional() @IsString()
+  resetToken?: string | null;
+
+  @IsOptional() @IsISO8601()
+  resetTokenExpires?: string | null;
+
+  @IsOptional() @IsISO8601()
+  termosAceitosEm?: string | null;
+
+  @IsOptional() @IsISO8601()
+  ultimoLogin?: string | null;
 }
