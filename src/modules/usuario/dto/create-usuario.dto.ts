@@ -13,6 +13,14 @@ export class CreateUsuarioDto {
 
   @IsOptional()
   @IsString()
+  googleId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  appleId?: string | null;
+
+  @IsOptional()
+  @IsString()
   fotoUrl?: string;
 
   @IsOptional()

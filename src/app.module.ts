@@ -1,6 +1,6 @@
+// src/app.module.ts
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { JwtModule } from '@nestjs/jwt';
 import { PrismaService } from './prisma.service';
 import { UsuarioModule } from './modules/usuario/usuario.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -23,13 +23,11 @@ import { MarcaModeloModule } from './modules/modelo-dispositivo/marca-modelo.mod
 import { PesagemModule } from './modules/pesagem/pesagem.module';
 import { SanidadeModule } from './modules/sanidade/sanidade.module';
 
-
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-    }),
-    // ...existing code...
+    ConfigModule.forRoot({ isGlobal: true }),
+
+    // feature modules
     UsuarioModule,
     SanidadeModule,
     PesagemModule,
@@ -46,13 +44,14 @@ import { SanidadeModule } from './modules/sanidade/sanidade.module';
     CompraInsumoModule,
     InvernadaModule,
     FinanceiroModule,
-    AuthModule,
-    JwtModule.register({}),
+    AuthModule, // <- JwtModule já vem de dentro do AuthModule
+
+    // MailerModule: ok manter — útil p/ templates no futuro
     MailerModule.forRootAsync({
       useFactory: () => ({
         transport: {
           host: process.env.SMTP_HOST,
-          port: parseInt(process.env.SMTP_PORT, 10),
+          port: parseInt(process.env.SMTP_PORT || '465', 10),
           secure: true,
           auth: {
             user: process.env.SMTP_USER,

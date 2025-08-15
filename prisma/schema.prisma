@@ -83,6 +83,8 @@ model Fazenda {
   pesagens     Pesagem[]
   ocorrencias  Ocorrencia[]
   compras      CompraInsumo[]
+
+  @@index([id, criadoEm])
 }
 
 model TitularFazenda {
@@ -93,7 +95,7 @@ model TitularFazenda {
   nacionalidade      String
   condicao           String
   percentualDetencao Float
-  fazenda            Fazenda @relation(fields: [fazendaId], references: [id])
+  fazenda            Fazenda @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
 }
 
 model FazendaUsuario {
@@ -103,8 +105,10 @@ model FazendaUsuario {
   papel     PapelUsuarioFazenda
   ativo     Boolean             @default(true)
   criadoEm  DateTime            @default(now())
-  usuario   Usuario             @relation(fields: [usuarioId], references: [id])
-  fazenda   Fazenda             @relation(fields: [fazendaId], references: [id])
+  usuario   Usuario             @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  fazenda   Fazenda             @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, fazendaId])
 }
 
 model Animal {
@@ -122,8 +126,8 @@ model Animal {
   leituras     LeituraDispositivo[]
   criadoEm     DateTime             @default(now())
   atualizadoEm DateTime             @updatedAt
-  fazenda      Fazenda              @relation(fields: [fazendaId], references: [id])
-  invernada    Invernada?           @relation(fields: [invernadaId], references: [id], name: "AnimaisNaInvernada")
+  fazenda      Fazenda              @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
+  invernada    Invernada?           @relation(fields: [invernadaId], references: [id], name: "AnimaisNaInvernada", onDelete: SetNull)
   Sanidade     Sanidade[]
   medicamentos Medicamento[]
   manejos      Manejo[]
@@ -131,6 +135,8 @@ model Animal {
   ocorrencias  Ocorrencia[]
 
   @@unique([fazendaId, brinco])
+  @@index([fazendaId])
+  @@index([invernadaId])
 }
 
 model Invernada {
@@ -141,9 +147,11 @@ model Invernada {
   status    StatusInvernada      @default(disponivel)
   fazendaId String
   criadoEm  DateTime             @default(now())
-  fazenda   Fazenda              @relation(fields: [fazendaId], references: [id])
+  fazenda   Fazenda              @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
   animais   Animal[]             @relation("AnimaisNaInvernada")
   leituras  LeituraDispositivo[]
+
+  @@index([fazendaId, nome])
 }
 
 model Lavoura {
@@ -155,7 +163,9 @@ model Lavoura {
   status      StatusLavoura @default(ativo)
   fazendaId   String
   criadoEm    DateTime      @default(now())
-  fazenda     Fazenda       @relation(fields: [fazendaId], references: [id])
+  fazenda     Fazenda       @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
+
+  @@index([fazendaId, dataPlantio])
 }
 
 model MarcaModeloDispositivo {
@@ -178,10 +188,13 @@ model Dispositivo {
   ativo         Boolean  @default(true)
   criadoEm      DateTime @default(now())
 
-  marcaModelo MarcaModeloDispositivo @relation(fields: [marcaModeloId], references: [id])
-  usuario     Usuario?               @relation(fields: [usuarioId], references: [id])
-  fazenda     Fazenda?               @relation(fields: [fazendaId], references: [id])
+  marcaModelo MarcaModeloDispositivo @relation(fields: [marcaModeloId], references: [id], onDelete: Cascade)
+  usuario     Usuario?               @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  fazenda     Fazenda?               @relation(fields: [fazendaId], references: [id], onDelete: SetNull)
   leituras    LeituraDispositivo[]
+
+  @@index([usuarioId])
+  @@index([fazendaId])
 }
 
 model LeituraDispositivo {
@@ -196,11 +209,14 @@ model LeituraDispositivo {
   dataLeitura   DateTime               @default(now())
   metadados     Json?
 
-  animal      Animal?     @relation(fields: [animalId], references: [id])
-  dispositivo Dispositivo @relation(fields: [dispositivoId], references: [id])
-  fazenda     Fazenda     @relation(fields: [fazendaId], references: [id])
-  invernada   Invernada?  @relation(fields: [invernadaId], references: [id])
-  usuario     Usuario     @relation(fields: [usuarioId], references: [id])
+  animal      Animal?     @relation(fields: [animalId], references: [id], onDelete: SetNull)
+  dispositivo Dispositivo @relation(fields: [dispositivoId], references: [id], onDelete: Cascade)
+  fazenda     Fazenda     @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
+  invernada   Invernada?  @relation(fields: [invernadaId], references: [id], onDelete: SetNull)
+  usuario     Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([fazendaId, dataLeitura])
+  @@index([animalId, dataLeitura])
 }
 
 model Usuario {
@@ -225,6 +241,8 @@ model Usuario {
   dispositivos Dispositivo[]
   leituras     LeituraDispositivo[]
   compras      CompraInsumo[]
+
+  @@index([status])
 }
 
 model LogAcesso {
@@ -234,7 +252,9 @@ model LogAcesso {
   acao      String
   ip        String?
   userAgent String?
-  usuario   Usuario  @relation(fields: [usuarioId], references: [id])
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, data])
 }
 
 model Sanidade {
@@ -245,7 +265,9 @@ model Sanidade {
   observacoes String?
   criadoEm    DateTime @default(now())
 
-  animal Animal @relation(fields: [animalId], references: [id])
+  animal Animal @relation(fields: [animalId], references: [id], onDelete: Cascade)
+
+  @@index([animalId, data])
 }
 
 model Financeiro {
@@ -257,28 +279,33 @@ model Financeiro {
   tipo      TipoFinanceiro
   criadoEm  DateTime       @default(now())
 
-  fazenda Fazenda @relation(fields: [fazendaId], references: [id])
+  // NOVO: vínculo 1–1 com CompraInsumo
+  compraInsumoId String?       @unique
+  compraInsumo   CompraInsumo? @relation(fields: [compraInsumoId], references: [id], onDelete: Cascade)
+
+  fazenda Fazenda @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
+
+  @@index([fazendaId, data])
+  @@index([tipo])
 }
 
 model Medicamento {
-  id           String   @id @default(uuid())
-  animalId     String
-  nome         String
-  data         DateTime
-  dosagem      String?
-  viaAplicacao String?
-  observacoes  String?
-  criadoEm     DateTime @default(now())
-
-  // lembretes
+  id               String       @id @default(uuid())
+  animalId         String
+  nome             String
+  data             DateTime
+  dosagem          String?
+  viaAplicacao     String?
+  observacoes      String?
+  criadoEm         DateTime     @default(now())
   proximaAplicacao DateTime?
-  lembreteAtivo    Boolean   @default(false)
+  lembreteAtivo    Boolean      @default(false)
+  notificacaoId    String?      @unique
+  notificacao      Notificacao? @relation(fields: [notificacaoId], references: [id])
+  animal           Animal       @relation(fields: [animalId], references: [id], onDelete: Cascade)
 
-  // relação 1:1 com Notificacao
-  notificacaoId String?      @unique
-  notificacao   Notificacao? @relation(fields: [notificacaoId], references: [id])
-
-  animal Animal @relation(fields: [animalId], references: [id])
+  @@index([animalId, data])
+  @@index([proximaAplicacao])
 }
 
 model Notificacao {
@@ -288,7 +315,6 @@ model Notificacao {
   lida      Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  // lado reverso do 1:1 — não define fields/references aqui
   medicamento Medicamento?
 }
 
@@ -301,8 +327,11 @@ model Manejo {
   observacao String?
   criadoEm   DateTime @default(now())
 
-  animal  Animal  @relation(fields: [animalId], references: [id])
-  fazenda Fazenda @relation(fields: [fazendaId], references: [id])
+  animal  Animal  @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  fazenda Fazenda @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
+
+  @@index([fazendaId, data])
+  @@index([animalId, data])
 }
 
 model Pesagem {
@@ -313,8 +342,11 @@ model Pesagem {
   pesoKg    Float
   criadoEm  DateTime @default(now())
 
-  animal  Animal  @relation(fields: [animalId], references: [id])
-  fazenda Fazenda @relation(fields: [fazendaId], references: [id])
+  animal  Animal  @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  fazenda Fazenda @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
+
+  @@index([animalId, data])
+  @@index([fazendaId, data])
 }
 
 model Ocorrencia {
@@ -327,8 +359,10 @@ model Ocorrencia {
   tipo      String
   criadoEm  DateTime @default(now())
 
-  fazenda Fazenda @relation(fields: [fazendaId], references: [id])
-  animal  Animal? @relation(fields: [animalId], references: [id])
+  fazenda Fazenda @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
+  animal  Animal? @relation(fields: [animalId], references: [id], onDelete: SetNull)
+
+  @@index([fazendaId, data])
 }
 
 model Insumo {
@@ -351,6 +385,12 @@ model CompraInsumo {
   fornecedor String?
   criadoEm   DateTime @default(now())
 
-  fazenda Fazenda @relation(fields: [fazendaId], references: [id])
-  usuario Usuario @relation(fields: [usuarioId], references: [id])
+  fazenda Fazenda @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  // NOVO: lado reverso do 1–1
+  financeiro Financeiro?
+
+  @@index([fazendaId, data])
+  @@index([usuarioId, data])
 }

@@ -1,8 +1,9 @@
+// src/modules/usuario/usuario.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
-import * as bcrypt from 'bcryptjs';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsuarioService {
@@ -36,11 +37,25 @@ export class UsuarioService {
     return this.prisma.usuario.findFirst({ where: { resetToken: token } });
   }
 
-  async update(id: string, data: Partial<UpdateUsuarioDto> & Record<string, any>) {
+  async findByGoogleId(googleId: string) {
+    return this.prisma.usuario.findFirst({ where: { googleId } });
+  }
+
+  async findByAppleId(appleId: string) {
+    return this.prisma.usuario.findFirst({ where: { appleId } });
+  }
+
+  async update(id: string, data: Partial<UpdateUsuarioDto>) {
+    const toUpdate: any = { ...data };
     if (data.senha) {
-      data.senha = await bcrypt.hash(data.senha, 10);
+      toUpdate.senha = await bcrypt.hash(data.senha, 10);
     }
-    return this.prisma.usuario.update({ where: { id }, data });
+    // Se vier string em ultimoLogin, converte pra Date
+    if (typeof (data as any)?.ultimoLogin === 'string') {
+      const d = new Date((data as any).ultimoLogin);
+      if (!Number.isNaN(d.getTime())) toUpdate.ultimoLogin = d;
+    }
+    return this.prisma.usuario.update({ where: { id }, data: toUpdate });
   }
 
   async remove(id: string) {

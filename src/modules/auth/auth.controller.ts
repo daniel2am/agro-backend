@@ -4,12 +4,13 @@ import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
-import { ForgotPasswordDto, ResetPasswordDto, RegisterAuthDto } from './dto';
+import { ForgotPasswordDto, ResetPasswordDto, RegisterAuthDto, LoginAuthDto } from './dto';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  // Email/senha
   @Post('register')
   async register(@Body() dto: RegisterAuthDto) {
     return this.authService.register(dto);
@@ -18,9 +19,10 @@ export class AuthController {
   @UseGuards(LocalAuthGuard)
   @Post('login')
   async login(@Req() req: Request) {
-    return this.authService.login(req.user);
+    return this.authService.login((req as any).user);
   }
 
+  // OAuth Web – Google
   @UseGuards(GoogleAuthGuard)
   @Get('google')
   async googleAuth() {}
@@ -28,13 +30,26 @@ export class AuthController {
   @UseGuards(GoogleAuthGuard)
   @Get('google/redirect')
   async googleAuthRedirect(@Req() req: Request, @Res() res: Response) {
-    const data = await this.authService.googleLogin(req.user);
+    const data = await this.authService.googleLogin((req as any).user);
     if (data?.token) {
       return res.redirect(`https://www.agrototalapp.com.br/auth/success?token=${data.token}`);
     }
     return res.redirect('https://www.agrototalapp.com.br/auth/error');
   }
 
+  // OAuth Mobile – Google (ID Token)
+  @Post('google/token')
+  async googleToken(@Body() body: { idToken: string }) {
+    return this.authService.loginOrRegisterWithGoogleIdToken(body.idToken);
+  }
+
+  // OAuth Mobile – Apple (Identity Token)
+  @Post('apple/token')
+  async appleToken(@Body() body: { identityToken: string }) {
+    return this.authService.loginOrRegisterWithAppleIdToken(body.identityToken);
+  }
+
+  // Esqueci / Reset
   @Post('forgot-password')
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto.email);

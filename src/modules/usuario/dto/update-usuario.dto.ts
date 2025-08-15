@@ -16,6 +16,19 @@ export class UpdateUsuarioDto {
 
   @IsOptional()
   @IsString()
+  googleId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  appleId?: string | null;
+
+  // recuperação de senha
+  resetToken?: string | null;
+  resetTokenExpires?: Date | null;
+  status?: string;
+
+  @IsOptional()
+  @IsString()
   fotoUrl?: string;
 
   @IsOptional()
