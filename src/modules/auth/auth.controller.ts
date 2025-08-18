@@ -10,50 +10,37 @@ import { ForgotPasswordDto, ResetPasswordDto, RegisterAuthDto } from './dto';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  // Email/senha
+  // Registro por e-mail/senha
   @Post('register')
   async register(@Body() dto: RegisterAuthDto) {
     return this.authService.register(dto);
   }
 
+  // Login por e-mail/senha (LocalStrategy -> validateUser)
   @UseGuards(LocalAuthGuard)
   @Post('login')
   async login(@Req() req: Request) {
     return this.authService.login((req as any).user);
   }
 
-  // OAuth Web – Google (Passport)
+  // Google OAuth via Passport (fluxo web)
   @UseGuards(GoogleAuthGuard)
   @Get('google')
   async googleAuth() {
-    // Deixa o Passport redirecionar pro Google
+    // Passport redireciona para o Google
   }
 
   @UseGuards(GoogleAuthGuard)
   @Get('google/redirect')
   async googleAuthRedirect(@Req() req: Request, @Res() res: Response) {
     const data = await this.authService.googleLogin((req as any).user);
-    const token = data?.token;
-
-    const state = (req.query?.state as string) || '';
-    const appScheme = process.env.APP_SCHEME || 'agrototal';
-
-    // Fluxo mobile: volta pro app com o token via deep link
-    if (state === 'mobile') {
-      if (token) {
-        return res.redirect(`${appScheme}://auth/success?token=${encodeURIComponent(token)}`);
-      }
-      return res.redirect(`${appScheme}://auth/error`);
-    }
-
-    // Fluxo web (como já estava)
-    if (token) {
-      return res.redirect(`https://www.agrototalapp.com.br/auth/success?token=${encodeURIComponent(token)}`);
+    if (data?.token) {
+      return res.redirect(`https://www.agrototalapp.com.br/auth/success?token=${encodeURIComponent(data.token)}`);
     }
     return res.redirect('https://www.agrototalapp.com.br/auth/error');
   }
 
-  // Esqueci / Reset
+  // Esqueci / Reset de senha
   @Post('forgot-password')
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto.email);
