@@ -7,7 +7,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { UsuarioService } from '../usuario/usuario.service';
 import { MailerService } from 'src/common/mailer/mailer.service';
-import * as bcrypt from 'bcryptjs'; // ⬅️ padronizado com UsuarioService
+import * as bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { RegisterAuthDto, ResetPasswordDto } from './dto';
 
@@ -34,8 +34,9 @@ export class AuthService {
     const payload = { sub: user.id, email: user.email };
     const token = this.jwtService.sign(payload);
 
-    // opcional: marcar último login também no registro
-    await this.usuarioService.update(user.id, { ultimoLogin: new Date() } as any);
+    try {
+      await this.usuarioService.update(user.id, { ultimoLogin: new Date() } as any);
+    } catch (_) {}
 
     return { token, user };
   }
@@ -44,12 +45,9 @@ export class AuthService {
     const payload = { sub: user.id, email: user.email };
     const token = this.jwtService.sign(payload);
 
-    // marca último login
     try {
       await this.usuarioService.update(user.id, { ultimoLogin: new Date() } as any);
-    } catch (_) {
-      // não falhar o login por causa disso
-    }
+    } catch (_) {}
 
     return { token, user };
   }
@@ -66,6 +64,7 @@ export class AuthService {
     return safe;
   }
 
+  /** Google (via Passport, já funcionando no seu fluxo) */
   async googleLogin(googleUser: any) {
     if (!googleUser) throw new UnauthorizedException();
 
@@ -84,7 +83,6 @@ export class AuthService {
     const payload = { sub: user.id, email: user.email };
     const token = this.jwtService.sign(payload);
 
-    // marca último login
     try {
       await this.usuarioService.update(user.id, { ultimoLogin: new Date() } as any);
     } catch (_) {}
@@ -92,12 +90,65 @@ export class AuthService {
     return { token, user };
   }
 
-  // Mantidos desabilitados (se o app não usar)
-  async loginOrRegisterWithGoogleIdToken(_idToken: string) {
-    throw new BadRequestException('Endpoint não habilitado neste fluxo.');
+  /** Apple (novo) — verifica o identityToken, cria/associa usuário e emite JWT */
+  async loginOrRegisterWithAppleIdToken(identityToken: string) {
+    if (!identityToken) throw new BadRequestException('identityToken ausente');
+
+    // Evita erro ESM do pacote 'jose' com Nest (usa import dinâmico).
+    const jose = await import('jose');
+
+    const JWKS = jose.createRemoteJWKSet(
+      new URL('https://appleid.apple.com/auth/keys')
+    );
+
+    // APPLE_AUDIENCE deve ser seu bundleId iOS (ex: com.agrototal.app)
+    const audience = process.env.APPLE_AUDIENCE || 'com.agrototal.app';
+
+    let payload: any;
+    try {
+      const { payload: p } = await jose.jwtVerify(identityToken, JWKS, {
+        issuer: 'https://appleid.apple.com',
+        audience,
+      });
+      payload = p;
+    } catch (e) {
+      throw new UnauthorizedException('Identity Token inválido');
+    }
+
+    const sub = payload?.sub as string; // id único Apple
+    const email = (payload?.email as string | undefined)?.toLowerCase() || null;
+    if (!sub) throw new UnauthorizedException('sub ausente no token da Apple');
+
+    // tenta localizar por email (se Apple forneceu no 1º login), senão por appleId
+    let user = email ? await this.usuarioService.findByEmail(email) : null;
+    if (!user) {
+      user = await this.usuarioService.findByAppleId(sub);
+    }
+
+    if (!user) {
+      // cria usuário (se a Apple não mandar email, usamos um fallback interno)
+      user = await this.usuarioService.create({
+        nome: email ?? 'Usuário Apple',
+        email: email ?? `${sub}@apple.local`,
+        senha: uuidv4(),       // login sempre via Apple
+        appleId: sub,
+      } as any);
+    } else if (!user.appleId) {
+      // garante o vínculo appleId no perfil existente
+      await this.usuarioService.update(user.id, { appleId: sub } as any);
+    }
+
+    const token = this.jwtService.sign({ sub: user.id, email: user.email });
+
+    try {
+      await this.usuarioService.update(user.id, { ultimoLogin: new Date() } as any);
+    } catch (_) {}
+
+    return { token, user };
   }
 
-  async loginOrRegisterWithAppleIdToken(_identityToken: string) {
+  // (Google ID Token desabilitado, seu fluxo atual não usa este endpoint)
+  async loginOrRegisterWithGoogleIdToken(_idToken: string) {
     throw new BadRequestException('Endpoint não habilitado neste fluxo.');
   }
 

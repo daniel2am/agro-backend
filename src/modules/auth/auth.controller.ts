@@ -23,44 +23,49 @@ export class AuthController {
     return this.authService.login((req as any).user);
   }
 
-  // Google OAuth via Passport (fluxo web)
+  // Google OAuth via Passport (fluxo web / mobile com state=mobile)
   @UseGuards(GoogleAuthGuard)
   @Get('google')
   async googleAuth() {
     // Passport redireciona para o Google
   }
 
-  // src/modules/auth/auth.controller.ts
-@UseGuards(GoogleAuthGuard)
-@Get('google/redirect')
-async googleAuthRedirect(@Req() req: Request, @Res() res: Response) {
-  try {
-    const data = await this.authService.googleLogin((req as any).user);
-    const token = data?.token;
-    const state = (req.query?.state as string) || '';
+  @UseGuards(GoogleAuthGuard)
+  @Get('google/redirect')
+  async googleAuthRedirect(@Req() req: Request, @Res() res: Response) {
+    try {
+      const data = await this.authService.googleLogin((req as any).user);
+      const token = data?.token;
+      const state = (req.query?.state as string) || '';
 
-    // fluxo mobile (volta para o app via scheme)
-    if (state === 'mobile') {
+      // fluxo mobile (volta para o app via scheme)
+      if (state === 'mobile') {
+        const scheme = process.env.APP_SCHEME || 'agrototal';
+        if (token) return res.redirect(`${scheme}://auth/success?token=${encodeURIComponent(token)}`);
+        return res.redirect(`${scheme}://auth/error`);
+      }
+
+      // fluxo web
+      if (token) {
+        return res.redirect(`https://www.agrototalapp.com.br/auth/success?token=${encodeURIComponent(token)}`);
+      }
+      return res.redirect('https://www.agrototalapp.com.br/auth/error');
+    } catch (e) {
+      const state = (req.query?.state as string) || '';
       const scheme = process.env.APP_SCHEME || 'agrototal';
-      if (token) return res.redirect(`${scheme}://auth/success?token=${encodeURIComponent(token)}`);
-      return res.redirect(`${scheme}://auth/error`);
+      const errorTarget =
+        state === 'mobile'
+          ? `${scheme}://auth/error`
+          : 'https://www.agrototalapp.com.br/auth/error';
+      return res.redirect(errorTarget);
     }
-
-    // fluxo web
-    if (token) {
-      return res.redirect(`https://www.agrototalapp.com.br/auth/success?token=${encodeURIComponent(token)}`);
-    }
-    return res.redirect('https://www.agrototalapp.com.br/auth/error');
-  } catch (e) {
-    const state = (req.query?.state as string) || '';
-    const scheme = process.env.APP_SCHEME || 'agrototal';
-    const errorTarget =
-      state === 'mobile'
-        ? `${scheme}://auth/error`
-        : 'https://www.agrototalapp.com.br/auth/error';
-    return res.redirect(errorTarget);
   }
-}
+
+  // Apple — recebe identityToken do app e retorna { token, user }
+  @Post('apple/token')
+  async appleToken(@Body() body: { identityToken: string }) {
+    return this.authService.loginOrRegisterWithAppleIdToken(body.identityToken);
+  }
 
   // Esqueci / Reset de senha
   @Post('forgot-password')

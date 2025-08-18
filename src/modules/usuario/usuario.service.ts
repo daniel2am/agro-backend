@@ -4,7 +4,7 @@ import { PrismaService } from 'src/prisma.service';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
 import * as bcrypt from 'bcryptjs';
-import { Prisma, TipoUsuario } from '@prisma/client'; // ⬅️ importa o enum
+import { Prisma, TipoUsuario } from '@prisma/client';
 
 @Injectable()
 export class UsuarioService {
@@ -38,6 +38,11 @@ export class UsuarioService {
     return this.prisma.usuario.findFirst({ where: { resetToken: token } });
   }
 
+  // 👇 novo: necessário para Apple
+  async findByAppleId(appleId: string) {
+    return this.prisma.usuario.findFirst({ where: { appleId } });
+  }
+
   async update(
     id: string,
     data: Prisma.UsuarioUpdateInput | (Partial<UpdateUsuarioDto> & Record<string, any>),
@@ -55,7 +60,7 @@ export class UsuarioService {
     if ((patch as any).termosAceitosEm)   (patch as any).termosAceitosEm   = toDate((patch as any).termosAceitosEm);
     if ((patch as any).ultimoLogin)       (patch as any).ultimoLogin       = toDate((patch as any).ultimoLogin);
 
-    // ✅ Normaliza enum TipoUsuario se vier string
+    // Normaliza enum TipoUsuario se vier string
     if ((patch as any).tipo !== undefined) {
       const raw = (patch as any).tipo;
       if (typeof raw === 'string') {
@@ -63,11 +68,9 @@ export class UsuarioService {
         if (norm === 'usuario' || norm === 'administrador' || norm === 'gestor') {
           (patch as any).tipo = norm as TipoUsuario;
         } else {
-          // valor inválido — remove para não quebrar o Prisma
           delete (patch as any).tipo;
         }
       }
-      // se já vier como TipoUsuario, deixa como está
     }
 
     return this.prisma.usuario.update({
