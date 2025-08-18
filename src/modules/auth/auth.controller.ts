@@ -30,26 +30,36 @@ export class AuthController {
     // Passport redireciona para o Google
   }
 
-  @UseGuards(GoogleAuthGuard)
+  // src/modules/auth/auth.controller.ts
+@UseGuards(GoogleAuthGuard)
 @Get('google/redirect')
 async googleAuthRedirect(@Req() req: Request, @Res() res: Response) {
-  const data = await this.authService.googleLogin((req as any).user);
+  try {
+    const data = await this.authService.googleLogin((req as any).user);
+    const token = data?.token;
+    const state = (req.query?.state as string) || '';
 
-  const token = data?.token;
-  const state = (req.query?.state as string) || ''; // ← vem de /auth/google?state=mobile
+    // fluxo mobile (volta para o app via scheme)
+    if (state === 'mobile') {
+      const scheme = process.env.APP_SCHEME || 'agrototal';
+      if (token) return res.redirect(`${scheme}://auth/success?token=${encodeURIComponent(token)}`);
+      return res.redirect(`${scheme}://auth/error`);
+    }
 
-  // se veio do app (WebBrowser.openAuthSessionAsync)
-  if (state === 'mobile') {
-    const scheme = process.env.APP_SCHEME || 'agrototal'; // defina APP_SCHEME=agrototal no .env
-    if (token) return res.redirect(`${scheme}://auth/success?token=${token}`);
-    return res.redirect(`${scheme}://auth/error`);
+    // fluxo web
+    if (token) {
+      return res.redirect(`https://www.agrototalapp.com.br/auth/success?token=${encodeURIComponent(token)}`);
+    }
+    return res.redirect('https://www.agrototalapp.com.br/auth/error');
+  } catch (e) {
+    const state = (req.query?.state as string) || '';
+    const scheme = process.env.APP_SCHEME || 'agrototal';
+    const errorTarget =
+      state === 'mobile'
+        ? `${scheme}://auth/error`
+        : 'https://www.agrototalapp.com.br/auth/error';
+    return res.redirect(errorTarget);
   }
-
-  // fluxo web (mantém como estava)
-  if (token) {
-    return res.redirect(`https://www.agrototalapp.com.br/auth/success?token=${token}`);
-  }
-  return res.redirect('https://www.agrototalapp.com.br/auth/error');
 }
 
   // Esqueci / Reset de senha
