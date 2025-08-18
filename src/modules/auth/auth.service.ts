@@ -1,3 +1,4 @@
+// src/modules/auth/auth.service.ts
 import {
   Injectable,
   BadRequestException,
@@ -6,7 +7,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { UsuarioService } from '../usuario/usuario.service';
 import { MailerService } from 'src/common/mailer/mailer.service';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs'; // ⬅️ padronizado com UsuarioService
 import { v4 as uuidv4 } from 'uuid';
 import { RegisterAuthDto, ResetPasswordDto } from './dto';
 
@@ -19,14 +20,22 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterAuthDto) {
-    const userExists = await this.usuarioService.findByEmail(dto.email);
+    const email = dto.email.trim().toLowerCase();
+    const userExists = await this.usuarioService.findByEmail(email);
     if (userExists) {
       throw new BadRequestException('E-mail já cadastrado');
     }
 
-    const user = await this.usuarioService.create(dto);
+    const user = await this.usuarioService.create({
+      ...dto,
+      email,
+    });
+
     const payload = { sub: user.id, email: user.email };
     const token = this.jwtService.sign(payload);
+
+    // opcional: marcar último login também no registro
+    await this.usuarioService.update(user.id, { ultimoLogin: new Date() } as any);
 
     return { token, user };
   }
@@ -34,12 +43,20 @@ export class AuthService {
   async login(user: any) {
     const payload = { sub: user.id, email: user.email };
     const token = this.jwtService.sign(payload);
+
+    // marca último login
+    try {
+      await this.usuarioService.update(user.id, { ultimoLogin: new Date() } as any);
+    } catch (_) {
+      // não falhar o login por causa disso
+    }
+
     return { token, user };
   }
 
-  /** 🔧 Reposto: usado pelo LocalStrategy */
+  /** Usado pelo LocalStrategy */
   async validateUser(email: string, senha: string) {
-    const user = await this.usuarioService.findByEmail(email);
+    const user = await this.usuarioService.findByEmail((email ?? '').trim().toLowerCase());
     if (!user) return null;
 
     const ok = await bcrypt.compare(senha, user.senha);
@@ -52,21 +69,30 @@ export class AuthService {
   async googleLogin(googleUser: any) {
     if (!googleUser) throw new UnauthorizedException();
 
-    let user = await this.usuarioService.findByEmail(googleUser.email);
+    const email = (googleUser.email ?? '').trim().toLowerCase();
+    if (!email) throw new BadRequestException('Google não retornou e-mail.');
+
+    let user = await this.usuarioService.findByEmail(email);
     if (!user) {
       user = await this.usuarioService.create({
-        nome: googleUser.nome || googleUser.name,
-        email: googleUser.email,
-        senha: uuidv4(), // senha aleatória
+        nome: googleUser.nome || googleUser.name || email,
+        email,
+        senha: uuidv4(), // senha aleatória, usuário loga pelo Google
       });
     }
 
     const payload = { sub: user.id, email: user.email };
     const token = this.jwtService.sign(payload);
+
+    // marca último login
+    try {
+      await this.usuarioService.update(user.id, { ultimoLogin: new Date() } as any);
+    } catch (_) {}
+
     return { token, user };
   }
 
-  // Fluxo mobile por ID Token (se você usar)
+  // Mantidos desabilitados (se o app não usar)
   async loginOrRegisterWithGoogleIdToken(_idToken: string) {
     throw new BadRequestException('Endpoint não habilitado neste fluxo.');
   }
@@ -76,7 +102,8 @@ export class AuthService {
   }
 
   async forgotPassword(email: string) {
-    const user = await this.usuarioService.findByEmail(email);
+    const norm = (email ?? '').trim().toLowerCase();
+    const user = await this.usuarioService.findByEmail(norm);
     if (!user) throw new BadRequestException('E-mail não cadastrado');
 
     const token = uuidv4();
@@ -85,7 +112,7 @@ export class AuthService {
     await this.usuarioService.update(user.id, {
       resetToken: token,
       resetTokenExpires: expires,
-    });
+    } as any);
 
     const url = `https://www.agrototalapp.com.br/reset?token=${token}`;
     await this.mailerService.send({
@@ -109,7 +136,7 @@ export class AuthService {
       senha: senhaCriptografada,
       resetToken: null,
       resetTokenExpires: null,
-    });
+    } as any);
 
     return { message: 'Senha redefinida com sucesso.' };
   }
