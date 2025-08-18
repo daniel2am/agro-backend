@@ -31,14 +31,26 @@ export class AuthController {
   }
 
   @UseGuards(GoogleAuthGuard)
-  @Get('google/redirect')
-  async googleAuthRedirect(@Req() req: Request, @Res() res: Response) {
-    const data = await this.authService.googleLogin((req as any).user);
-    if (data?.token) {
-      return res.redirect(`https://www.agrototalapp.com.br/auth/success?token=${encodeURIComponent(data.token)}`);
-    }
-    return res.redirect('https://www.agrototalapp.com.br/auth/error');
+@Get('google/redirect')
+async googleAuthRedirect(@Req() req: Request, @Res() res: Response) {
+  const data = await this.authService.googleLogin((req as any).user);
+
+  const token = data?.token;
+  const state = (req.query?.state as string) || ''; // ← vem de /auth/google?state=mobile
+
+  // se veio do app (WebBrowser.openAuthSessionAsync)
+  if (state === 'mobile') {
+    const scheme = process.env.APP_SCHEME || 'agrototal'; // defina APP_SCHEME=agrototal no .env
+    if (token) return res.redirect(`${scheme}://auth/success?token=${token}`);
+    return res.redirect(`${scheme}://auth/error`);
   }
+
+  // fluxo web (mantém como estava)
+  if (token) {
+    return res.redirect(`https://www.agrototalapp.com.br/auth/success?token=${token}`);
+  }
+  return res.redirect('https://www.agrototalapp.com.br/auth/error');
+}
 
   // Esqueci / Reset de senha
   @Post('forgot-password')
