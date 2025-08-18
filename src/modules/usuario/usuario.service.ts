@@ -34,13 +34,12 @@ export class UsuarioService {
     return this.prisma.usuario.findUnique({ where: { email } });
   }
 
-  async findByResetToken(token: string) {
-    return this.prisma.usuario.findFirst({ where: { resetToken: token } });
+  async findByAppleId(appleId: string) {
+    return this.prisma.usuario.findUnique({ where: { appleId } });
   }
 
-  // 👇 novo: necessário para Apple
-  async findByAppleId(appleId: string) {
-    return this.prisma.usuario.findFirst({ where: { appleId } });
+  async findByResetToken(token: string) {
+    return this.prisma.usuario.findFirst({ where: { resetToken: token } });
   }
 
   async update(
@@ -49,18 +48,15 @@ export class UsuarioService {
   ) {
     const patch: Prisma.UsuarioUpdateInput = { ...data };
 
-    // Hash em senha, se vier crua
     if (typeof (patch as any).senha === 'string' && (patch as any).senha.length > 0) {
       (patch as any).senha = await bcrypt.hash((patch as any).senha, 10);
     }
 
-    // Converte datas (strings ISO -> Date)
     const toDate = (v: unknown) => (typeof v === 'string' ? new Date(v) : (v as any));
     if ((patch as any).resetTokenExpires) (patch as any).resetTokenExpires = toDate((patch as any).resetTokenExpires);
     if ((patch as any).termosAceitosEm)   (patch as any).termosAceitosEm   = toDate((patch as any).termosAceitosEm);
     if ((patch as any).ultimoLogin)       (patch as any).ultimoLogin       = toDate((patch as any).ultimoLogin);
 
-    // Normaliza enum TipoUsuario se vier string
     if ((patch as any).tipo !== undefined) {
       const raw = (patch as any).tipo;
       if (typeof raw === 'string') {
@@ -73,10 +69,7 @@ export class UsuarioService {
       }
     }
 
-    return this.prisma.usuario.update({
-      where: { id },
-      data: patch,
-    });
+    return this.prisma.usuario.update({ where: { id }, data: patch });
   }
 
   async remove(id: string) {

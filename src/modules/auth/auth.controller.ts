@@ -23,12 +23,10 @@ export class AuthController {
     return this.authService.login((req as any).user);
   }
 
-  // Google OAuth via Passport (fluxo web / mobile com state=mobile)
+  // Google OAuth via Passport (fluxo web e mobile com ?state=mobile)
   @UseGuards(GoogleAuthGuard)
   @Get('google')
-  async googleAuth() {
-    // Passport redireciona para o Google
-  }
+  async googleAuth() {}
 
   @UseGuards(GoogleAuthGuard)
   @Get('google/redirect')
@@ -38,7 +36,7 @@ export class AuthController {
       const token = data?.token;
       const state = (req.query?.state as string) || '';
 
-      // fluxo mobile (volta para o app via scheme)
+      // fluxo mobile: volta para o app via scheme
       if (state === 'mobile') {
         const scheme = process.env.APP_SCHEME || 'agrototal';
         if (token) return res.redirect(`${scheme}://auth/success?token=${encodeURIComponent(token)}`);
@@ -50,18 +48,15 @@ export class AuthController {
         return res.redirect(`https://www.agrototalapp.com.br/auth/success?token=${encodeURIComponent(token)}`);
       }
       return res.redirect('https://www.agrototalapp.com.br/auth/error');
-    } catch (e) {
+    } catch {
       const state = (req.query?.state as string) || '';
       const scheme = process.env.APP_SCHEME || 'agrototal';
-      const errorTarget =
-        state === 'mobile'
-          ? `${scheme}://auth/error`
-          : 'https://www.agrototalapp.com.br/auth/error';
+      const errorTarget = state === 'mobile' ? `${scheme}://auth/error` : 'https://www.agrototalapp.com.br/auth/error';
       return res.redirect(errorTarget);
     }
   }
 
-  // Apple — recebe identityToken do app e retorna { token, user }
+  // Apple (mobile) – recebe identityToken do app
   @Post('apple/token')
   async appleToken(@Body() body: { identityToken: string }) {
     return this.authService.loginOrRegisterWithAppleIdToken(body.identityToken);

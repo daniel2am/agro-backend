@@ -22,21 +22,12 @@ export class AuthService {
   async register(dto: RegisterAuthDto) {
     const email = dto.email.trim().toLowerCase();
     const userExists = await this.usuarioService.findByEmail(email);
-    if (userExists) {
-      throw new BadRequestException('E-mail já cadastrado');
-    }
+    if (userExists) throw new BadRequestException('E-mail já cadastrado');
 
-    const user = await this.usuarioService.create({
-      ...dto,
-      email,
-    });
-
+    const user = await this.usuarioService.create({ ...dto, email });
     const payload = { sub: user.id, email: user.email };
     const token = this.jwtService.sign(payload);
-
-    try {
-      await this.usuarioService.update(user.id, { ultimoLogin: new Date() } as any);
-    } catch (_) {}
+    await this.usuarioService.update(user.id, { ultimoLogin: new Date() } as any);
 
     return { token, user };
   }
@@ -44,11 +35,9 @@ export class AuthService {
   async login(user: any) {
     const payload = { sub: user.id, email: user.email };
     const token = this.jwtService.sign(payload);
-
     try {
       await this.usuarioService.update(user.id, { ultimoLogin: new Date() } as any);
-    } catch (_) {}
-
+    } catch {}
     return { token, user };
   }
 
@@ -56,18 +45,14 @@ export class AuthService {
   async validateUser(email: string, senha: string) {
     const user = await this.usuarioService.findByEmail((email ?? '').trim().toLowerCase());
     if (!user) return null;
-
     const ok = await bcrypt.compare(senha, user.senha);
     if (!ok) return null;
-
     const { senha: _omit, ...safe } = user as any;
     return safe;
   }
 
-  /** Google (via Passport, já funcionando no seu fluxo) */
   async googleLogin(googleUser: any) {
     if (!googleUser) throw new UnauthorizedException();
-
     const email = (googleUser.email ?? '').trim().toLowerCase();
     if (!email) throw new BadRequestException('Google não retornou e-mail.');
 
@@ -76,78 +61,69 @@ export class AuthService {
       user = await this.usuarioService.create({
         nome: googleUser.nome || googleUser.name || email,
         email,
-        senha: uuidv4(), // senha aleatória, usuário loga pelo Google
+        senha: uuidv4(),
       });
     }
 
     const payload = { sub: user.id, email: user.email };
     const token = this.jwtService.sign(payload);
-
     try {
       await this.usuarioService.update(user.id, { ultimoLogin: new Date() } as any);
-    } catch (_) {}
-
+    } catch {}
     return { token, user };
   }
 
-  /** Apple (novo) — verifica o identityToken, cria/associa usuário e emite JWT */
+  // ✅ Apple ID – verifica identityToken e cria/loga
   async loginOrRegisterWithAppleIdToken(identityToken: string) {
     if (!identityToken) throw new BadRequestException('identityToken ausente');
 
-    // Evita erro ESM do pacote 'jose' com Nest (usa import dinâmico).
-    const jose = await import('jose');
+    // Import dinâmico p/ evitar problema ESM no Render
+    const { createRemoteJWKSet, jwtVerify } = await import('jose');
 
-    const JWKS = jose.createRemoteJWKSet(
-      new URL('https://appleid.apple.com/auth/keys')
-    );
-
-    // APPLE_AUDIENCE deve ser seu bundleId iOS (ex: com.agrototal.app)
-    const audience = process.env.APPLE_AUDIENCE || 'com.agrototal.app';
+    const issuer = 'https://appleid.apple.com';
+    const audience = process.env.APPLE_BUNDLE_ID || 'com.agrototal.app'; // seu bundleIdentifier
+    const JWKS = createRemoteJWKSet(new URL('https://appleid.apple.com/auth/keys'));
 
     let payload: any;
     try {
-      const { payload: p } = await jose.jwtVerify(identityToken, JWKS, {
-        issuer: 'https://appleid.apple.com',
-        audience,
-      });
-      payload = p;
+      const verified = await jwtVerify(identityToken, JWKS, { issuer, audience });
+      payload = verified.payload;
     } catch (e) {
-      throw new UnauthorizedException('Identity Token inválido');
+      throw new UnauthorizedException('Identity token inválido');
     }
 
-    const sub = payload?.sub as string; // id único Apple
-    const email = (payload?.email as string | undefined)?.toLowerCase() || null;
-    if (!sub) throw new UnauthorizedException('sub ausente no token da Apple');
+    const sub = String(payload.sub || '');
+    const email = (payload.email as string | undefined)?.toLowerCase() || undefined;
 
-    // tenta localizar por email (se Apple forneceu no 1º login), senão por appleId
-    let user = email ? await this.usuarioService.findByEmail(email) : null;
-    if (!user) {
-      user = await this.usuarioService.findByAppleId(sub);
+    if (!sub) throw new BadRequestException('Apple sub ausente');
+
+    // Tente achar por appleId primeiro; se não houver, tente por email (se Apple forneceu)
+    let user = await this.usuarioService.findByAppleId(sub);
+    if (!user && email) {
+      user = await this.usuarioService.findByEmail(email);
     }
 
     if (!user) {
-      // cria usuário (se a Apple não mandar email, usamos um fallback interno)
+      // cria usuário novo
       user = await this.usuarioService.create({
-        nome: email ?? 'Usuário Apple',
-        email: email ?? `${sub}@apple.local`,
-        senha: uuidv4(),       // login sempre via Apple
-        appleId: sub,
-      } as any);
-    } else if (!user.appleId) {
-      // garante o vínculo appleId no perfil existente
-      await this.usuarioService.update(user.id, { appleId: sub } as any);
+        nome: email || 'Usuário Apple',
+        email: email || `${sub}@apple-user.agrototal`, // fallback se Apple ocultar email
+        senha: uuidv4(),
+      });
     }
 
-    const token = this.jwtService.sign({ sub: user.id, email: user.email });
-
-    try {
+    // garanta que appleId esteja salvo
+    if (!user.appleId) {
+      await this.usuarioService.update(user.id, { appleId: sub, ultimoLogin: new Date() } as any);
+    } else {
       await this.usuarioService.update(user.id, { ultimoLogin: new Date() } as any);
-    } catch (_) {}
+    }
 
-    return { token, user };
+    const jwt = this.jwtService.sign({ sub: user.id, email: user.email });
+    return { token: jwt, user };
   }
 
-  // (Google ID Token desabilitado, seu fluxo atual não usa este endpoint)
+  // Desabilitado neste fluxo (não usado)
   async loginOrRegisterWithGoogleIdToken(_idToken: string) {
     throw new BadRequestException('Endpoint não habilitado neste fluxo.');
   }
@@ -158,12 +134,8 @@ export class AuthService {
     if (!user) throw new BadRequestException('E-mail não cadastrado');
 
     const token = uuidv4();
-    const expires = new Date(Date.now() + 1000 * 60 * 60); // 1h
-
-    await this.usuarioService.update(user.id, {
-      resetToken: token,
-      resetTokenExpires: expires,
-    } as any);
+    const expires = new Date(Date.now() + 1000 * 60 * 60);
+    await this.usuarioService.update(user.id, { resetToken: token, resetTokenExpires: expires } as any);
 
     const url = `https://www.agrototalapp.com.br/reset?token=${token}`;
     await this.mailerService.send({
@@ -172,7 +144,6 @@ export class AuthService {
       text: `Use este link para resetar sua senha: ${url}`,
       html: `<p>Use este link para resetar sua senha: <a href="${url}">${url}</a></p>`,
     });
-
     return { message: 'E-mail de recuperação enviado com sucesso.' };
   }
 
@@ -181,14 +152,12 @@ export class AuthService {
     if (!user || user.resetTokenExpires < new Date()) {
       throw new BadRequestException('Token inválido ou expirado');
     }
-
     const senhaCriptografada = await bcrypt.hash(dto.senha, 10);
     await this.usuarioService.update(user.id, {
       senha: senhaCriptografada,
       resetToken: null,
       resetTokenExpires: null,
     } as any);
-
     return { message: 'Senha redefinida com sucesso.' };
   }
 }
