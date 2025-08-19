@@ -437,6 +437,27 @@ export class DashboardService {
       select: { data: true, acao: true },
     });
 
+    /** mantém só o que pertence à fazenda atual */
+    const logsSomenteDestaFazenda = logs.filter((l) => {
+      const kv = this.parseKeyVals(l.acao);
+
+      // 1) se o texto tiver fazendaId=..., usa isso
+      if (kv.fazendaId) return kv.fazendaId === fazendaId;
+
+      // 2) para "fazenda_criada id=...", compara o id com a fazenda atual
+      if (l.acao.startsWith('fazenda_') && kv.id) return kv.id === fazendaId;
+
+      // 3) logs sem referência de fazenda: pode manter ou descartar.
+      // Sugestão: manter (true) para não sumir com logs genéricos.
+      return true;
+    });
+
+    // use logsSomenteDestaFazenda no lugar de "logs"
+    for (const l of logsSomenteDestaFazenda) {
+      const norm = this.normalizaLog(l.acao);
+      // ... resto do seu push para o historico ...
+    }
+
     for (const l of logs) {
       const norm = this.normalizaLog(l.acao);
       historico.push({
