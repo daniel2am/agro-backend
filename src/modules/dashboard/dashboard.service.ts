@@ -48,12 +48,11 @@ export class DashboardService {
       totalNotificacoes,
       saldo,
       totalHectares,
-      notificacoes: totalNotificacoes, // redundância pró-front
+      notificacoes: totalNotificacoes,
     };
   }
 
   // ===== Helpers: parse de logs =====
-  // Captura pares k=v no texto do log (ex.: brinco=123 changes=Peso,Nome)
   private parseKeyVals(acao: string): Record<string, string> {
     const map: Record<string, string> = {};
     const regex = /(\w+)=([^=\n\r]+)/g;
@@ -117,7 +116,7 @@ export class DashboardService {
     if (acao.startsWith('invernada_atualizada')) return { tipo: 'log', descricao: '✏️ Atualizou invernada', meta: { changes } };
     if (acao.startsWith('invernada_excluida')) return { tipo: 'log', descricao: '🗑️ Excluiu invernada' };
 
-    // compra-insumo (aceita os dois formatos de prefixo)
+    // compra-insumo
     if (acao.startsWith('compra_criada') || acao.startsWith('compra_insumo_criada'))
       return { tipo: 'log', descricao: '🧾 Criou compra de insumo' };
     if (acao.startsWith('compra_atualizada') || acao.startsWith('compra_insumo_atualizada'))
@@ -130,7 +129,7 @@ export class DashboardService {
     if (acao.startsWith('financeiro_atualizado')) return { tipo: 'log', descricao: '✏️ Atualizou lançamento financeiro', meta: { changes } };
     if (acao.startsWith('financeiro_excluido')) return { tipo: 'log', descricao: '🗑️ Excluiu lançamento financeiro' };
 
-    // ocorrencia (adicionado)
+    // ocorrencia
     if (acao.startsWith('ocorrencia_criada')) return { tipo: 'ocorrencia', descricao: '📝 Criou ocorrência' };
     if (acao.startsWith('ocorrencia_atualizada')) return { tipo: 'ocorrencia', descricao: '✏️ Atualizou ocorrência', meta: { changes } };
     if (acao.startsWith('ocorrencia_excluida')) return { tipo: 'ocorrencia', descricao: '🗑️ Excluiu ocorrência' };
@@ -235,7 +234,6 @@ export class DashboardService {
           },
         },
       }),
-      // 👇 NOVO: Ocorrências
       this.prisma.ocorrencia.findMany({
         where: { fazendaId },
         orderBy: { data: 'desc' },
@@ -321,7 +319,7 @@ export class DashboardService {
       });
     }
 
-    // pesagens com peso anterior
+    // pesagens (com peso anterior)
     const pesagens = await this.prisma.pesagem.findMany({
       where: { fazendaId },
       orderBy: { data: 'desc' },
@@ -409,7 +407,7 @@ export class DashboardService {
       });
     }
 
-    // 👇 NOVO: ocorrências (base)
+    // ocorrências
     for (const o of ocorrencias) {
       historico.push({
         tipo: 'ocorrencia',
@@ -429,7 +427,7 @@ export class DashboardService {
       });
     }
 
-    // logs do usuário (enriquece com meta/changes; inclui ocorrências e compras)
+    // logs do usuário → filtra só os da fazenda atual
     const logs = await this.prisma.logAcesso.findMany({
       where: { usuarioId },
       orderBy: { data: 'desc' },
@@ -437,28 +435,14 @@ export class DashboardService {
       select: { data: true, acao: true },
     });
 
-    /** mantém só o que pertence à fazenda atual */
     const logsSomenteDestaFazenda = logs.filter((l) => {
       const kv = this.parseKeyVals(l.acao);
-
-      // 1) se o texto tiver fazendaId=..., usa isso
-      if (kv.fazendaId) return kv.fazendaId === fazendaId;
-
-      // 2) para "fazenda_criada id=...", compara o id com a fazenda atual
-      if (l.acao.startsWith('fazenda_') && kv.id) return kv.id === fazendaId;
-
-      // 3) logs sem referência de fazenda: pode manter ou descartar.
-      // Sugestão: manter (true) para não sumir com logs genéricos.
-      return true;
+      if (kv.fazendaId) return kv.fazendaId === fazendaId;        // logs com fazendaId explícito
+      if (l.acao.startsWith('fazenda_') && kv.id) return kv.id === fazendaId; // fazenda_criada id=...
+      return true; // manter logs genéricos
     });
 
-    // use logsSomenteDestaFazenda no lugar de "logs"
     for (const l of logsSomenteDestaFazenda) {
-      const norm = this.normalizaLog(l.acao);
-      // ... resto do seu push para o historico ...
-    }
-
-    for (const l of logs) {
       const norm = this.normalizaLog(l.acao);
       historico.push({
         tipo: norm.tipo,
@@ -467,7 +451,7 @@ export class DashboardService {
         meta: norm.meta,
       });
 
-      // enriquecer "animal_atualizado" com dados atuais do animal (via brinco)
+      // enriquecer "animal_atualizado"
       if (norm.tipo === 'animal_atualizado' && norm.meta?.animal?.brinco) {
         const brinco = norm.meta.animal.brinco as string;
         const a = await this.prisma.animal.findFirst({
@@ -487,7 +471,6 @@ export class DashboardService {
       }
     }
 
-    // ordena/limita
     historico.sort((a, b) => b.data.getTime() - a.data.getTime());
     return historico.slice(0, 6);
   }
