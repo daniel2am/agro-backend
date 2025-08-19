@@ -14,7 +14,14 @@ export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
   // ===== Resumo do topo =====
-  async getResumoDaFazenda(fazendaId: string) {
+  async getResumoDaFazenda(fazendaId: string, usuarioId: string) {
+    // valida acesso do usuário à fazenda
+    const acesso = await this.prisma.fazendaUsuario.findFirst({
+      where: { fazendaId, usuarioId },
+      select: { id: true },
+    });
+    if (!acesso) throw new ForbiddenException('Acesso negado à fazenda');
+
     const [
       totalAnimais,
       totalReceitasAgg,
@@ -29,10 +36,10 @@ export class DashboardService {
       this.prisma.lavoura.aggregate({ where: { fazendaId }, _sum: { areaHa: true } }),
     ]);
 
-    const totalReceitas = totalReceitasAgg._sum.valor || 0;
-    const totalDespesas = totalDespesasAgg._sum.valor || 0;
-    const saldo = +(totalReceitas - totalDespesas).toFixed(2);
-    const totalHectares = +(totalHectaresAgg._sum.areaHa || 0);
+    const totalReceitas = Number(totalReceitasAgg._sum.valor ?? 0);
+    const totalDespesas = Number(totalDespesasAgg._sum.valor ?? 0);
+    const saldo = Number((totalReceitas - totalDespesas).toFixed(2));
+    const totalHectares = Number(totalHectaresAgg._sum.areaHa ?? 0);
 
     return {
       totalAnimais,
