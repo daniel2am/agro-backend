@@ -1,84 +1,82 @@
+// src/modules/dashboard/dashboard.controller.ts
 import {
-  Body,
+  BadRequestException,
   Controller,
   Get,
-  Param,
   Post,
+  Body,
+  Query,
+  Param,
   Req,
   UseGuards,
-  BadRequestException,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { Request } from 'express';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'; // ajuste o caminho se necessário
 import { DashboardService } from './dashboard.service';
-import {
-  IndicadoresBodyDto,
-  GroupBy,
-  TipoIndicador,
-} from './dto/indicadores.dto';
+import { GroupBy, IndicadoresFiltro, TipoIndicador } from './dto/indicadores.dto';
+// Se você já usa Jwt global, pode remover a linha abaixo:
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
-@ApiTags('Dashboard')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
-@Controller('dashboard/:fazendaId')
+@Controller('dashboard')
+@UseGuards(JwtAuthGuard) // remova se o Guard já é global
 export class DashboardController {
-  constructor(private readonly service: DashboardService) {}
+  constructor(private readonly dashboard: DashboardService) {}
 
+  /**
+   * GET /dashboard/resumo?fazendaId=...
+   * Header: Authorization: Bearer <JWT>
+   */
   @Get('resumo')
-  async getResumo(
-    @Param('fazendaId') fazendaId: string,
-    @Req() req: Request,
-  ) {
-    const usuarioId = (req.user as any)?.sub as string;
+  async resumo(@Query('fazendaId') fazendaId: string, @Req() req: Request) {
+    const usuarioId = (req as any)?.user?.sub || (req as any)?.user?.id;
     if (!usuarioId) throw new BadRequestException('Usuário inválido no token');
-    return this.service.getResumoDaFazenda(fazendaId, usuarioId);
+    if (!fazendaId) throw new BadRequestException('fazendaId é obrigatório');
+
+    return this.dashboard.getResumoDaFazenda(fazendaId, usuarioId);
   }
 
+  /**
+   * GET /dashboard/historico?fazendaId=...
+   */
   @Get('historico')
-  async getHistorico(
-    @Param('fazendaId') fazendaId: string,
-    @Req() req: Request,
-  ) {
-    const usuarioId = (req.user as any)?.sub as string;
+  async historico(@Query('fazendaId') fazendaId: string, @Req() req: Request) {
+    const usuarioId = (req as any)?.user?.sub || (req as any)?.user?.id;
     if (!usuarioId) throw new BadRequestException('Usuário inválido no token');
-    return this.service.getHistoricoRecentes(fazendaId, usuarioId);
+    if (!fazendaId) throw new BadRequestException('fazendaId é obrigatório');
+
+    return this.dashboard.getHistoricoRecentes(fazendaId, usuarioId);
   }
 
-  @Post('indicadores')
-  @ApiBody({ type: IndicadoresBodyDto })
-  async getIndicadores(
-    @Param('fazendaId') fazendaId: string,
+  /**
+   * POST /dashboard/indicadores/:tipo?fazendaId=...
+   * Body: IndicadoresFiltro
+   * :tipo = 'peso' | 'financeiro'
+   */
+  @Post('indicadores/:tipo')
+  async indicadores(
+    @Param('tipo') tipoParam: string,
+    @Query('fazendaId') fazendaId: string,
+    @Body() filtro: IndicadoresFiltro,
     @Req() req: Request,
-    @Body() body: IndicadoresBodyDto,
   ) {
-    const usuarioId = (req.user as any)?.sub as string;
+    const usuarioId = (req as any)?.user?.sub || (req as any)?.user?.id;
     if (!usuarioId) throw new BadRequestException('Usuário inválido no token');
+    if (!fazendaId) throw new BadRequestException('fazendaId é obrigatório');
 
-    // defaults & sanity
-    const tipo = body.tipo as TipoIndicador;
-    const from = new Date(body.from);
-    const to = new Date(body.to);
-    const groupBy = (body.groupBy ?? GroupBy.month) as GroupBy;
+    // normaliza tipo
+    const lower = (tipoParam || '').toLowerCase();
+    const tipo: TipoIndicador =
+      lower === 'peso' || lower === 'financeiro' ? (lower as TipoIndicador) : null as any;
+    if (!tipo) throw new BadRequestException('Tipo inválido (use "peso" ou "financeiro")');
 
-    if (isNaN(from.getTime()) || isNaN(to.getTime())) {
-      throw new BadRequestException('Parâmetros from/to inválidos (ISO esperado).');
+    // compat: se alguém mandar "animal" (legado) no body, tratamos já no service
+    if ((filtro as any)?.groupBy === 'animal') {
+      (filtro as any).groupBy = GroupBy.month;
     }
-    if (from > to) {
-      throw new BadRequestException('Range de datas inválido (from > to).');
-    }
 
-    return this.service.getIndicadores(
-      fazendaId,
-      tipo,
-      usuarioId,
-      {
-        from,
-        to,
-        groupBy,
-        invernadaId: body.invernadaId,
-        animalIds: body.animalIds,
-      },
-    );
+    // Transforma datas caso cheguem como string (quando não usar class-transformer global)
+    if (typeof (filtro as any).from === 'string') (filtro as any).from = new Date((filtro as any).from);
+    if (typeof (filtro as any).to === 'string') (filtro as any).to = new Date((filtro as any).to);
+
+    return this.dashboard.getIndicadores(fazendaId, tipo, usuarioId, filtro);
   }
 }

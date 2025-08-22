@@ -1,9 +1,14 @@
+// src/modules/dashboard/dto/indicadores.dto.ts
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   IsArray,
-  IsDateString,
+  IsDate,
   IsEnum,
+  IsIn,
   IsOptional,
   IsString,
+  ArrayNotEmpty,
 } from 'class-validator';
 
 export enum TipoIndicador {
@@ -12,30 +17,49 @@ export enum TipoIndicador {
 }
 
 export enum GroupBy {
+  day = 'day',
   month = 'month',
-  animal = 'animal',
+  quarter = 'quarter',
 }
 
-export class IndicadoresBodyDto {
-  @IsEnum(TipoIndicador)
-  tipo!: TipoIndicador;
+export class IndicadoresFiltro {
+  @ApiProperty({ example: '2025-01-01' })
+  @Type(() => Date)
+  @IsDate()
+  from: Date;
 
-  @IsDateString()
-  from!: string; // ISO
+  @ApiProperty({ example: '2025-12-31' })
+  @Type(() => Date)
+  @IsDate()
+  to: Date;
 
-  @IsDateString()
-  to!: string;   // ISO
+  @ApiPropertyOptional({ enum: GroupBy, example: GroupBy.month })
+  @IsOptional()
+  @IsEnum(GroupBy)
+  groupBy?: GroupBy;
 
+  @ApiPropertyOptional({ example: 'uuid-invernada' })
   @IsOptional()
   @IsString()
   invernadaId?: string;
 
+  @ApiPropertyOptional({ type: [String], example: ['uuid-animal-1', 'uuid-animal-2'] })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   animalIds?: string[];
 
+  // financeiro: 'saldo' | 'receita' | 'despesa'
+  @ApiPropertyOptional({ example: 'saldo', enum: ['saldo', 'receita', 'despesa'] })
   @IsOptional()
-  @IsEnum(GroupBy)
-  groupBy?: GroupBy; // default: month (se não enviar)
+  @IsIn(['saldo', 'receita', 'despesa'])
+  natureza?: 'saldo' | 'receita' | 'despesa';
 }
+
+export type IndicadoresResposta = {
+  labels: string[];
+  datasets: Array<{
+    label: string;
+    data: number[];
+  }>;
+};
