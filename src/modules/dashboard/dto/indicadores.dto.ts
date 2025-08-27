@@ -1,14 +1,12 @@
 // src/modules/dashboard/dto/indicadores.dto.ts
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
 import {
   IsArray,
-  IsDate,
+  IsDateString,
   IsEnum,
   IsIn,
   IsOptional,
   IsString,
-  ArrayNotEmpty,
 } from 'class-validator';
 
 export enum TipoIndicador {
@@ -23,15 +21,14 @@ export enum GroupBy {
 }
 
 export class IndicadoresFiltro {
+  // Envie como 'YYYY-MM-DD' ou ISO completo; ex.: '2025-01-01' ou '2025-01-01T00:00:00.000Z'
   @ApiProperty({ example: '2025-01-01' })
-  @Type(() => Date)
-  @IsDate()
-  from: Date;
+  @IsDateString()
+  from: string;
 
   @ApiProperty({ example: '2025-12-31' })
-  @Type(() => Date)
-  @IsDate()
-  to: Date;
+  @IsDateString()
+  to: string;
 
   @ApiPropertyOptional({ enum: GroupBy, example: GroupBy.month })
   @IsOptional()
@@ -43,7 +40,10 @@ export class IndicadoresFiltro {
   @IsString()
   invernadaId?: string;
 
-  @ApiPropertyOptional({ type: [String], example: ['uuid-animal-1', 'uuid-animal-2'] })
+  @ApiPropertyOptional({
+    type: [String],
+    example: ['uuid-animal-1', 'uuid-animal-2'],
+  })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
