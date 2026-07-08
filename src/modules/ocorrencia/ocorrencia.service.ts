@@ -55,16 +55,35 @@ export class OcorrenciaService {
     }
   }
 
+  private async resolverFazendaId(
+    dto: { animalId?: string; fazendaId?: string },
+    usuarioId: string,
+  ): Promise<string> {
+    if (dto.animalId) {
+      const animal = await this.prisma.animal.findFirst({
+        where: { id: dto.animalId, fazenda: { usuarios: { some: { usuarioId } } } },
+        select: { fazendaId: true },
+      });
+      if (!animal) throw new ForbiddenException('Acesso negado ao animal');
+      return animal.fazendaId;
+    }
+    if (dto.fazendaId) {
+      await this.assertAcessoFazenda(dto.fazendaId, usuarioId);
+      return dto.fazendaId;
+    }
+    throw new BadRequestException('Informe animalId ou fazendaId');
+  }
+
   // ===== CREATE =====
   async create(dto: CreateOcorrenciaDto, user: UsuarioPayload) {
-    await this.assertAcessoFazenda(user.fazendaId, user.id);
-    await this.assertAnimalNaMesmaFazenda(dto.animalId as any, user.fazendaId);
+    const fazendaId = await this.resolverFazendaId(dto, user.id);
+    await this.assertAnimalNaMesmaFazenda(dto.animalId as any, fazendaId);
 
     const data = dto.data ? toDateOrThrow(dto.data) : new Date();
 
     const criada = await this.prisma.ocorrencia.create({
       data: {
-        fazendaId: user.fazendaId,
+        fazendaId,
         animalId: dto.animalId ?? null,
         titulo: dto.titulo,
         descricao: dto.descricao ?? null,
@@ -95,7 +114,7 @@ export class OcorrenciaService {
     } = query;
 
     const where: any = {
-      fazendaId: user.fazendaId,
+      fazenda: { usuarios: { some: { usuarioId: user.id } } },
       ...(animalId ? { animalId } : {}),
       ...(search
         ? {
@@ -132,11 +151,11 @@ export class OcorrenciaService {
 
   // ===== GET ONE =====
   async findOne(id: string, user: UsuarioPayload) {
-    const ocorrencia = await this.prisma.ocorrencia.findUnique({
-      where: { id },
+    const ocorrencia = await this.prisma.ocorrencia.findFirst({
+      where: { id, fazenda: { usuarios: { some: { usuarioId: user.id } } } },
       include: { animal: true },
     });
-    if (!ocorrencia || ocorrencia.fazendaId !== user.fazendaId) {
+    if (!ocorrencia) {
       throw new NotFoundException('Ocorrência não encontrada');
     }
     return ocorrencia;
@@ -148,7 +167,7 @@ export class OcorrenciaService {
 
     // se trocar animal, valida fazenda
     if (dto.animalId && dto.animalId !== current.animalId) {
-      await this.assertAnimalNaMesmaFazenda(dto.animalId, user.fazendaId);
+      await this.assertAnimalNaMesmaFazenda(dto.animalId, current.fazendaId);
     }
 
     const atualizado = await this.prisma.ocorrencia.update({

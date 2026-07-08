@@ -1,6 +1,9 @@
-import { IsNotEmpty, IsNumber, IsString, IsDateString, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsString, IsDateString, IsOptional, IsUUID } from 'class-validator';
 
 export class CreateCompraInsumoDto {
+  @IsUUID()
+  fazendaId: string;
+
   @IsDateString()
   data: string;
 

@@ -38,8 +38,10 @@ type HistoricoItem = {
 export class HistoricoService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getHistoricoAnimal(animalId: string) {
-    const animal = await this.prisma.animal.findUnique({ where: { id: animalId } });
+  async getHistoricoAnimal(animalId: string, usuarioId: string) {
+    const animal = await this.prisma.animal.findFirst({
+      where: { id: animalId, fazenda: { usuarios: { some: { usuarioId } } } },
+    });
     if (!animal) throw new NotFoundException('Animal não encontrado');
 
     // Carregamentos paralelos

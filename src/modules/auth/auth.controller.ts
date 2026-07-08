@@ -1,5 +1,6 @@
 // src/modules/auth/auth.controller.ts
 import { Controller, Post, Body, Get, Req, Res, UseGuards } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { LocalAuthGuard } from './guards/local-auth.guard';
@@ -11,13 +12,16 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   // Registro por e-mail/senha
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('register')
   async register(@Body() dto: RegisterAuthDto) {
     return this.authService.register(dto);
   }
 
   // Login por e-mail/senha (LocalStrategy -> validateUser)
-  @UseGuards(LocalAuthGuard)
+  @UseGuards(ThrottlerGuard, LocalAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('login')
   async login(@Req() req: Request) {
     return this.authService.login((req as any).user);
@@ -63,11 +67,15 @@ export class AuthController {
   }
 
   // Esqueci / Reset de senha
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('forgot-password')
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto.email);
   }
 
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('reset-password')
   async resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto);

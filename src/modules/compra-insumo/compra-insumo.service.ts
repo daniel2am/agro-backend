@@ -38,13 +38,13 @@ export class CompraInsumoService {
 
   // ===== CRUD =====
   async create(dto: CreateCompraInsumoDto, user: UsuarioPayload) {
-    await this.assertAcessoFazenda(user.fazendaId, user.id);
+    await this.assertAcessoFazenda(dto.fazendaId, user.id);
 
     const { compra } = await this.prisma.$transaction(async (tx) => {
       // 1) cria compra
       const compra = await tx.compraInsumo.create({
         data: {
-          fazendaId: user.fazendaId,
+          fazendaId: dto.fazendaId,
           usuarioId: user.id,
           data: new Date(dto.data),
           insumo: dto.insumo,
@@ -58,7 +58,7 @@ export class CompraInsumoService {
       // 2) cria espelho no financeiro (despesa) usando RELAÇÃO (fazenda connect) + vínculo 1–1 com compra
       await tx.financeiro.create({
         data: {
-          fazenda: { connect: { id: user.fazendaId } }, // <- trocado de fazendaId: string para connect
+          fazenda: { connect: { id: dto.fazendaId } },
           data: new Date(dto.data),
           descricao: `Compra de ${dto.insumo}`,
           valor: dto.valor,
@@ -79,10 +79,8 @@ export class CompraInsumoService {
   }
 
   async findAll(user: UsuarioPayload) {
-    await this.assertAcessoFazenda(user.fazendaId, user.id);
-
     return this.prisma.compraInsumo.findMany({
-      where: { fazendaId: user.fazendaId },
+      where: { fazenda: { usuarios: { some: { usuarioId: user.id } } } },
       orderBy: { data: 'desc' },
       include: {
         financeiro: true, // requer schema + `npx prisma generate` após adicionar a relação 1–1
@@ -92,7 +90,7 @@ export class CompraInsumoService {
 
   async update(id: string, dto: UpdateCompraInsumoDto, user: UsuarioPayload) {
     const compra = await this.prisma.compraInsumo.findFirst({
-      where: { id, fazendaId: user.fazendaId },
+      where: { id, fazenda: { usuarios: { some: { usuarioId: user.id } } } },
     });
     if (!compra) throw new NotFoundException('Compra não encontrada');
 
@@ -135,7 +133,7 @@ export class CompraInsumoService {
 
   async remove(id: string, user: UsuarioPayload) {
     const compra = await this.prisma.compraInsumo.findFirst({
-      where: { id, fazendaId: user.fazendaId },
+      where: { id, fazenda: { usuarios: { some: { usuarioId: user.id } } } },
       select: { id: true, insumo: true },
     });
     if (!compra) throw new NotFoundException('Compra não encontrada');

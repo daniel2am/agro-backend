@@ -10,10 +10,6 @@ export class CreateLeituraDispositivoDto {
   @IsNotEmpty()
   fazendaId: string;
 
-  @IsString()
-  @IsNotEmpty()
-  usuarioId: string;
-
   @IsEnum(TipoLeituraDispositivo)
   tipo: TipoLeituraDispositivo;
 

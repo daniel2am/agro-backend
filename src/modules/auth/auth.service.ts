@@ -9,7 +9,12 @@ import { UsuarioService } from '../usuario/usuario.service';
 import { MailerService } from 'src/common/mailer/mailer.service';
 import * as bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
+import { createHash } from 'crypto';
 import { RegisterAuthDto, ResetPasswordDto } from './dto';
+
+function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
 
 @Injectable()
 export class AuthService {
@@ -29,7 +34,8 @@ export class AuthService {
     const token = this.jwtService.sign(payload);
     await this.usuarioService.update(user.id, { ultimoLogin: new Date() } as any);
 
-    return { token, user };
+    const { senha: _omit, ...safeUser } = user as any;
+    return { token, user: safeUser };
   }
 
   async login(user: any) {
@@ -70,7 +76,8 @@ export class AuthService {
     try {
       await this.usuarioService.update(user.id, { ultimoLogin: new Date() } as any);
     } catch {}
-    return { token, user };
+    const { senha: _omit, ...safeUser } = user as any;
+    return { token, user: safeUser };
   }
 
   // ✅ Apple ID – verifica identityToken e cria/loga
@@ -120,7 +127,8 @@ export class AuthService {
     }
 
     const jwt = this.jwtService.sign({ sub: user.id, email: user.email });
-    return { token: jwt, user };
+    const { senha: _omit, ...safeUser } = user as any;
+    return { token: jwt, user: safeUser };
   }
 
   // Desabilitado neste fluxo (não usado)
@@ -135,7 +143,7 @@ export class AuthService {
 
     const token = uuidv4();
     const expires = new Date(Date.now() + 1000 * 60 * 60);
-    await this.usuarioService.update(user.id, { resetToken: token, resetTokenExpires: expires } as any);
+    await this.usuarioService.update(user.id, { resetToken: hashToken(token), resetTokenExpires: expires } as any);
 
     const url = `https://www.agrototalapp.com.br/reset?token=${token}`;
     await this.mailerService.send({
@@ -148,7 +156,7 @@ export class AuthService {
   }
 
   async resetPassword(dto: ResetPasswordDto) {
-    const user = await this.usuarioService.findByResetToken(dto.token);
+    const user = await this.usuarioService.findByResetToken(hashToken(dto.token));
     if (!user || user.resetTokenExpires < new Date()) {
       throw new BadRequestException('Token inválido ou expirado');
     }

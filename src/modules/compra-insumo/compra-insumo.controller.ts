@@ -1,13 +1,15 @@
 import {
-  Controller, Get, Post, Body, Patch, Param, Delete, Res
+  Controller, Get, Post, Body, Patch, Param, Delete, Res, UseGuards
 } from '@nestjs/common';
 import { CompraInsumoService } from './compra-insumo.service';
 import { CreateCompraInsumoDto } from './dto/create-compra.dto';
 import { UpdateCompraInsumoDto } from './dto/update-compra.dto';
 import { AuthUser } from 'src/common/decorators/auth-user.decorator';
 import { UsuarioPayload } from '../auth/dto/usuario-payload.interface';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Response } from 'express';
 
+@UseGuards(JwtAuthGuard)
 @Controller('compra-insumo')
 export class CompraInsumoController {
   constructor(private readonly service: CompraInsumoService) {}

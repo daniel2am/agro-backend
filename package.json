@@ -9,6 +9,8 @@
     "node": ">=18 <23"
   },
   "scripts": {
+    "prisma:validate": "prisma validate && prisma format",
+    "check": "npm run prisma:validate && npm run lint && npm run build && npm run test",
     "prisma:deploy": "npx prisma generate && npx prisma migrate deploy",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",

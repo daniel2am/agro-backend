@@ -7,14 +7,17 @@ import {
   Delete,
   Body,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import { OcorrenciaService } from './ocorrencia.service';
 import { CreateOcorrenciaDto } from './dto/create-ocorrencia.dto';
 import { UpdateOcorrenciaDto } from './dto/update-ocorrencia.dto';
 import { AuthUser } from 'src/common/decorators/auth-user.decorator';
 import { UsuarioPayload } from '../auth/dto/usuario-payload.interface';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Response } from 'express';
 
+@UseGuards(JwtAuthGuard)
 @Controller('ocorrencias')
 export class OcorrenciaController {
   constructor(private readonly service: OcorrenciaService) {}

@@ -71,8 +71,9 @@ export class ManejoService {
 
   // CREATE
   async create(dto: CreateManejoDto, user: UsuarioPayload) {
-    // valida acesso ao animal (quando houver)
+    // animalId é obrigatório no DTO; a fazenda é derivada do próprio animal
     const animal = await this.assertAcessoAoAnimal(dto.animalId as any, user.id);
+    if (!animal) throw new BadRequestException('animalId é obrigatório');
 
     const dataManejo = toDateOrNull(dto.data);
     if (!dataManejo) throw new BadRequestException('Data inválida');
@@ -82,8 +83,8 @@ export class ManejoService {
         tipo: dto.tipo,
         observacao: dto.observacao ?? null,
         data: dataManejo,
-        fazendaId: user.fazendaId,
-        animalId: animal?.id ?? null,
+        fazendaId: animal.fazendaId,
+        animalId: animal.id,
       },
       include: { animal: true },
     });
@@ -109,7 +110,7 @@ export class ManejoService {
     } = params;
 
     const where: Prisma.ManejoWhereInput = {
-      fazendaId: user.fazendaId,
+      fazenda: { usuarios: { some: { usuarioId: user.id } } },
       ...(animalId ? { animalId } : {}),
       ...(tipo ? { tipo: { equals: String(tipo), mode: Prisma.QueryMode.insensitive } } : {}),
       ...(search
@@ -145,7 +146,7 @@ export class ManejoService {
   // GET ONE
   async findOne(id: string, user: UsuarioPayload) {
     const manejo = await this.prisma.manejo.findFirst({
-      where: { id, fazendaId: user.fazendaId },
+      where: { id, fazenda: { usuarios: { some: { usuarioId: user.id } } } },
       include: { animal: true },
     });
     if (!manejo) throw new NotFoundException('Manejo não encontrado');

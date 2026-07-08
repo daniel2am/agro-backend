@@ -6,10 +6,26 @@ import { UpdateUsuarioDto } from './dto/update-usuario.dto';
 import * as bcrypt from 'bcryptjs';
 import { Prisma, TipoUsuario } from '@prisma/client';
 
+const SAFE_SELECT = {
+  id: true,
+  nome: true,
+  email: true,
+  fotoUrl: true,
+  status: true,
+  tipo: true,
+  criadoEm: true,
+  atualizadoEm: true,
+  ultimoLogin: true,
+  termosAceitosEm: true,
+} satisfies Prisma.UsuarioSelect;
+
 @Injectable()
 export class UsuarioService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Retorna o registro completo (incluindo hash da senha) porque o AuthService
+  // precisa dele internamente (ex.: comparar/atualizar appleId). Quem expõe
+  // isso a um cliente HTTP deve remover o campo `senha` antes de responder.
   async create(data: CreateUsuarioDto) {
     const senhaHash = await bcrypt.hash(data.senha, 10);
     return this.prisma.usuario.create({
@@ -21,11 +37,14 @@ export class UsuarioService {
   }
 
   async findAll() {
-    return this.prisma.usuario.findMany();
+    return this.prisma.usuario.findMany({ select: SAFE_SELECT });
   }
 
   async findOne(id: string) {
-    const usuario = await this.prisma.usuario.findUnique({ where: { id } });
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id },
+      select: SAFE_SELECT,
+    });
     if (!usuario) throw new NotFoundException('Usuário não encontrado');
     return usuario;
   }
@@ -69,10 +88,10 @@ export class UsuarioService {
       }
     }
 
-    return this.prisma.usuario.update({ where: { id }, data: patch });
+    return this.prisma.usuario.update({ where: { id }, data: patch, select: SAFE_SELECT });
   }
 
   async remove(id: string) {
-    return this.prisma.usuario.delete({ where: { id } });
+    return this.prisma.usuario.delete({ where: { id }, select: SAFE_SELECT });
   }
 }

@@ -25,4 +25,13 @@ export class CreateOcorrenciaDto {
   @IsString()
   @IsOptional()
   animalId?: string;
+
+  @ApiProperty({
+    example: 'uuid-da-fazenda',
+    required: false,
+    description: 'Obrigatório quando animalId não é informado',
+  })
+  @IsString()
+  @IsOptional()
+  fazendaId?: string;
 }

@@ -8,13 +8,13 @@ import {
   Delete,
   Query,
   UseGuards,
-  Req,
 } from '@nestjs/common';
 import { PesagemService } from './pesagem.service';
-  import { CreatePesagemDto } from './dto/create-pesagem.dto';
+import { CreatePesagemDto } from './dto/create-pesagem.dto';
 import { UpdatePesagemDto } from './dto/update-pesagem.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { Request } from 'express';
+import { AuthUser } from 'src/common/decorators/auth-user.decorator';
+import { UsuarioPayload } from '../auth/dto/usuario-payload.interface';
 
 @UseGuards(JwtAuthGuard)
 @Controller('pesagens')
@@ -22,32 +22,27 @@ export class PesagemController {
   constructor(private readonly pesagemService: PesagemService) {}
 
   @Post()
-  create(@Body() dto: CreatePesagemDto, @Req() req: Request) {
-    const usuarioId = (req.user as any).sub;
-    return this.pesagemService.create(dto, usuarioId);
+  create(@Body() dto: CreatePesagemDto, @AuthUser() user: UsuarioPayload) {
+    return this.pesagemService.create(dto, user.id);
   }
 
   @Get()
-  findAll(@Query() query: any, @Req() req: Request) {
-    const usuarioId = (req.user as any).sub;
-    return this.pesagemService.findAll(usuarioId, query);
+  findAll(@Query() query: any, @AuthUser() user: UsuarioPayload) {
+    return this.pesagemService.findAll(user.id, query);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @Req() req: Request) {
-    const usuarioId = (req.user as any).sub;
-    return this.pesagemService.findOne(id, usuarioId);
+  findOne(@Param('id') id: string, @AuthUser() user: UsuarioPayload) {
+    return this.pesagemService.findOne(id, user.id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdatePesagemDto, @Req() req: Request) {
-    const usuarioId = (req.user as any).sub;
-    return this.pesagemService.update(id, dto, usuarioId);
+  update(@Param('id') id: string, @Body() dto: UpdatePesagemDto, @AuthUser() user: UsuarioPayload) {
+    return this.pesagemService.update(id, dto, user.id);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @Req() req: Request) {
-    const usuarioId = (req.user as any).sub;
-    return this.pesagemService.remove(id, usuarioId);
+  remove(@Param('id') id: string, @AuthUser() user: UsuarioPayload) {
+    return this.pesagemService.remove(id, user.id);
   }
 }
