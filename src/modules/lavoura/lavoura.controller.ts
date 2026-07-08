@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
 import { LavouraService } from './lavoura.service';
 import { CreateLavouraDto, UpdateLavouraDto } from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { Request } from 'express';
+import { AuthUser } from 'src/common/decorators/auth-user.decorator';
+import { UsuarioPayload } from '../auth/dto/usuario-payload.interface';
 
 @Controller('lavoura')
 @UseGuards(JwtAuthGuard)
@@ -10,32 +11,27 @@ export class LavouraController {
   constructor(private readonly lavouraService: LavouraService) {}
 
   @Post()
-  create(@Body() dto: CreateLavouraDto, @Req() req: Request) {
-    const usuarioId = req.user['sub'];
-    return this.lavouraService.create(dto, usuarioId);
+  create(@Body() dto: CreateLavouraDto, @AuthUser() user: UsuarioPayload) {
+    return this.lavouraService.create(dto, user.id);
   }
 
   @Get()
-  findAll(@Req() req: Request) {
-    const usuarioId = req.user['sub'];
-    return this.lavouraService.findAll(usuarioId);
+  findAll(@AuthUser() user: UsuarioPayload) {
+    return this.lavouraService.findAll(user.id);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @Req() req: Request) {
-    const usuarioId = req.user['sub'];
-    return this.lavouraService.findOne(id, usuarioId);
+  findOne(@Param('id') id: string, @AuthUser() user: UsuarioPayload) {
+    return this.lavouraService.findOne(id, user.id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateLavouraDto, @Req() req: Request) {
-    const usuarioId = req.user['sub'];
-    return this.lavouraService.update(id, dto, usuarioId);
+  update(@Param('id') id: string, @Body() dto: UpdateLavouraDto, @AuthUser() user: UsuarioPayload) {
+    return this.lavouraService.update(id, dto, user.id);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @Req() req: Request) {
-    const usuarioId = req.user['sub'];
-    return this.lavouraService.remove(id, usuarioId);
+  remove(@Param('id') id: string, @AuthUser() user: UsuarioPayload) {
+    return this.lavouraService.remove(id, user.id);
   }
 }

@@ -7,7 +7,6 @@ import {
   Patch,
   Param,
   Delete,
-  Req,
   UseGuards,
   Query,
 } from '@nestjs/common';
@@ -15,7 +14,8 @@ import { InvernadaService } from './invernada.service';
 import { CreateInvernadaDto } from './dto/create-invernada.dto';
 import { UpdateInvernadaDto } from './dto/update-invernada.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { Request } from 'express';
+import { AuthUser } from 'src/common/decorators/auth-user.decorator';
+import { UsuarioPayload } from '../auth/dto/usuario-payload.interface';
 
 @UseGuards(JwtAuthGuard)
 @Controller('invernadas')
@@ -23,30 +23,30 @@ export class InvernadaController {
   constructor(private readonly invernadaService: InvernadaService) {}
 
   @Post()
-  create(@Body() dto: CreateInvernadaDto, @Req() req: Request) {
-    return this.invernadaService.create(dto, req.user['sub']);
+  create(@Body() dto: CreateInvernadaDto, @AuthUser() user: UsuarioPayload) {
+    return this.invernadaService.create(dto, user.id);
   }
 
   @Get()
-  findAll(@Req() req: Request, @Query('fazendaId') fazendaId?: string) {
+  findAll(@AuthUser() user: UsuarioPayload, @Query('fazendaId') fazendaId?: string) {
     if (fazendaId) {
-      return this.invernadaService.findAllByFazenda(fazendaId);
+      return this.invernadaService.findAllByFazenda(fazendaId, user.id);
     }
-    return this.invernadaService.findAllByUsuario(req.user['sub'], fazendaId);
+    return this.invernadaService.findAllByUsuario(user.id, fazendaId);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @Req() req: Request) {
-    return this.invernadaService.findOne(id, req.user['sub']);
+  findOne(@Param('id') id: string, @AuthUser() user: UsuarioPayload) {
+    return this.invernadaService.findOne(id, user.id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateInvernadaDto, @Req() req: Request) {
-    return this.invernadaService.update(id, dto, req.user['sub']);
+  update(@Param('id') id: string, @Body() dto: UpdateInvernadaDto, @AuthUser() user: UsuarioPayload) {
+    return this.invernadaService.update(id, dto, user.id);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @Req() req: Request) {
-    return this.invernadaService.remove(id, req.user['sub']);
+  remove(@Param('id') id: string, @AuthUser() user: UsuarioPayload) {
+    return this.invernadaService.remove(id, user.id);
   }
 }

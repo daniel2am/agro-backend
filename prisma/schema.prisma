@@ -23,6 +23,12 @@ enum StatusLavoura {
   inativo
 }
 
+enum StatusAnimal {
+  ativo
+  vendido
+  morto
+}
+
 enum TipoUsuario {
   usuario
   administrador
@@ -123,6 +129,8 @@ model Animal {
   raca         String?
   idade        Int?
   unidadeIdade UnidadeIdade?
+  status       StatusAnimal         @default(ativo)
+  dataSaida    DateTime?
   leituras     LeituraDispositivo[]
   criadoEm     DateTime             @default(now())
   atualizadoEm DateTime             @updatedAt
@@ -133,10 +141,12 @@ model Animal {
   manejos      Manejo[]
   pesagens     Pesagem[]
   ocorrencias  Ocorrencia[]
+  financeiros  Financeiro[]
 
   @@unique([fazendaId, brinco])
   @@index([fazendaId])
   @@index([invernadaId])
+  @@index([status])
 }
 
 model Invernada {
@@ -164,6 +174,7 @@ model Lavoura {
   fazendaId   String
   criadoEm    DateTime      @default(now())
   fazenda     Fazenda       @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
+  financeiros Financeiro[]
 
   @@index([fazendaId, dataPlantio])
 }
@@ -283,9 +294,20 @@ model Financeiro {
   compraInsumoId String?       @unique
   compraInsumo   CompraInsumo? @relation(fields: [compraInsumoId], references: [id], onDelete: Cascade)
 
+  // Venda de gado: dá baixa automática no animal vendido
+  animalId String?
+  animal   Animal? @relation(fields: [animalId], references: [id], onDelete: SetNull)
+
+  // Venda de lavoura: subtrai areaVendidaHa da área total da lavoura
+  lavouraId     String?
+  lavoura       Lavoura? @relation(fields: [lavouraId], references: [id], onDelete: SetNull)
+  areaVendidaHa Float?
+
   fazenda Fazenda @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
 
   @@index([fazendaId, data])
+  @@index([animalId])
+  @@index([lavouraId])
   @@index([tipo])
 }
 

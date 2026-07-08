@@ -70,12 +70,11 @@ export class InvernadaService {
 
   // ===== listagens =====
   // por fazenda (opcionalmente validando usuário)
-  findAllByFazenda(fazendaId: string, usuarioId?: string) {
-    // se usuarioId vier, aplica filtro de acesso
+  findAllByFazenda(fazendaId: string, usuarioId: string) {
     return this.prisma.invernada.findMany({
       where: {
         fazendaId,
-        ...(usuarioId ? { fazenda: { usuarios: { some: { usuarioId } } } } : {}),
+        fazenda: { usuarios: { some: { usuarioId } } },
       },
       include: { _count: { select: { animais: true } } },
       orderBy: { nome: 'asc' },
