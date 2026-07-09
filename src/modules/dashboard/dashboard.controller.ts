@@ -7,17 +7,16 @@ import {
   Body,
   Query,
   Param,
-  Req,
   UseGuards,
 } from '@nestjs/common';
-import { Request } from 'express';
 import { DashboardService } from './dashboard.service';
 import { GroupBy, IndicadoresFiltro, TipoIndicador } from './dto/indicadores.dto';
-// Se você já usa Jwt global, pode remover a linha abaixo:
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AuthUser } from 'src/common/decorators/auth-user.decorator';
+import { UsuarioPayload } from '../auth/dto/usuario-payload.interface';
 
 @Controller('dashboard')
-@UseGuards(JwtAuthGuard) // remova se o Guard já é global
+@UseGuards(JwtAuthGuard)
 export class DashboardController {
   constructor(private readonly dashboard: DashboardService) {}
 
@@ -26,24 +25,20 @@ export class DashboardController {
    * Header: Authorization: Bearer <JWT>
    */
   @Get('resumo')
-  async resumo(@Query('fazendaId') fazendaId: string, @Req() req: Request) {
-    const usuarioId = (req as any)?.user?.sub || (req as any)?.user?.id;
-    if (!usuarioId) throw new BadRequestException('Usuário inválido no token');
+  async resumo(@Query('fazendaId') fazendaId: string, @AuthUser() user: UsuarioPayload) {
     if (!fazendaId) throw new BadRequestException('fazendaId é obrigatório');
 
-    return this.dashboard.getResumoDaFazenda(fazendaId, usuarioId);
+    return this.dashboard.getResumoDaFazenda(fazendaId, user.id);
   }
 
   /**
    * GET /dashboard/historico?fazendaId=...
    */
   @Get('historico')
-  async historico(@Query('fazendaId') fazendaId: string, @Req() req: Request) {
-    const usuarioId = (req as any)?.user?.sub || (req as any)?.user?.id;
-    if (!usuarioId) throw new BadRequestException('Usuário inválido no token');
+  async historico(@Query('fazendaId') fazendaId: string, @AuthUser() user: UsuarioPayload) {
     if (!fazendaId) throw new BadRequestException('fazendaId é obrigatório');
 
-    return this.dashboard.getHistoricoRecentes(fazendaId, usuarioId);
+    return this.dashboard.getHistoricoRecentes(fazendaId, user.id);
   }
 
   /**
@@ -56,10 +51,9 @@ export class DashboardController {
     @Param('tipo') tipoParam: string,
     @Query('fazendaId') fazendaId: string,
     @Body() filtro: IndicadoresFiltro,
-    @Req() req: Request,
+    @AuthUser() user: UsuarioPayload,
   ) {
-    const usuarioId = (req as any)?.user?.sub || (req as any)?.user?.id;
-    if (!usuarioId) throw new BadRequestException('Usuário inválido no token');
+    const usuarioId = user.id;
     if (!fazendaId) throw new BadRequestException('fazendaId é obrigatório');
 
     // normaliza tipo
