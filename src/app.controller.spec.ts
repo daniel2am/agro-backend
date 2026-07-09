@@ -15,8 +15,8 @@ describe('AppController', () => {
   });
 
   describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+    it('should return the app name', () => {
+      expect(appController.getHello()).toBe('AgroTotal App');
     });
   });
 });
