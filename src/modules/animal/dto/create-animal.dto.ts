@@ -40,6 +40,10 @@ export class CreateAnimalDto {
   @IsString()
   invernadaId?: string;
 
+  @IsOptional()
+  @IsString()
+  rebanhoId?: string;
+
   // novos
   @IsOptional()
   @IsNumber()

@@ -81,6 +81,7 @@ model Fazenda {
   invernadas   Invernada[]
   lavouras     Lavoura[]
   animais      Animal[]
+  rebanhos     Rebanho[]
   titulares    TitularFazenda[]
   dispositivos Dispositivo[]
   leituras     LeituraDispositivo[]
@@ -122,6 +123,7 @@ model Animal {
   brinco       String
   fazendaId    String
   invernadaId  String?
+  rebanhoId    String?
   nome         String?
   sexo         String?
   peso         Float?
@@ -136,6 +138,7 @@ model Animal {
   atualizadoEm DateTime             @updatedAt
   fazenda      Fazenda              @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
   invernada    Invernada?           @relation(fields: [invernadaId], references: [id], name: "AnimaisNaInvernada", onDelete: SetNull)
+  rebanho      Rebanho?             @relation(fields: [rebanhoId], references: [id], onDelete: SetNull)
   Sanidade     Sanidade[]
   medicamentos Medicamento[]
   manejos      Manejo[]
@@ -146,7 +149,23 @@ model Animal {
   @@unique([fazendaId, brinco])
   @@index([fazendaId])
   @@index([invernadaId])
+  @@index([rebanhoId])
   @@index([status])
+}
+
+model Rebanho {
+  id          String   @id @default(uuid())
+  fazendaId   String
+  nome        String
+  tipo        String? // cria, recria, engorda, vaca, touro, etc
+  observacoes String?
+  criadoEm    DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  fazenda Fazenda  @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
+  animais Animal[]
+
+  @@index([fazendaId])
 }
 
 model Invernada {

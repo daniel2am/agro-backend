@@ -59,4 +59,8 @@ export class UpdateAnimalDto {
   @IsOptional()
   @IsString()
   invernadaId?: string;
+
+  @IsOptional()
+  @IsString()
+  rebanhoId?: string;
 }

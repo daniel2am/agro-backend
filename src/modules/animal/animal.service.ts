@@ -56,6 +56,10 @@ export class AnimalService {
     if (dto.invernadaId) {
       await this.verificarInvernada(dto.invernadaId, dto.fazendaId);
     }
+    // rebanho (grupo) idem: tem que ser da mesma fazenda
+    if (dto.rebanhoId) {
+      await this.verificarRebanho(dto.rebanhoId, dto.fazendaId);
+    }
 
     const animal = await this.prisma.animal.create({
       data: {
@@ -69,6 +73,7 @@ export class AnimalService {
         lote: dto.lote ?? null,
         fazendaId: dto.fazendaId,
         invernadaId: dto.invernadaId ?? null,
+        rebanhoId: dto.rebanhoId ?? null,
       },
     });
 
@@ -131,7 +136,7 @@ export class AnimalService {
         take,
         skip,
         orderBy: { brinco: 'asc' },
-        include: { fazenda: true, invernada: true },
+        include: { fazenda: true, invernada: true, rebanho: true },
       }),
       this.prisma.animal.count({ where }),
     ]);
@@ -146,7 +151,7 @@ export class AnimalService {
         id,
         fazenda: { usuarios: { some: { usuarioId } } },
       },
-      include: { fazenda: true, invernada: true },
+      include: { fazenda: true, invernada: true, rebanho: true },
     });
 
     if (!animal) {
@@ -169,6 +174,9 @@ export class AnimalService {
     if (dto.invernadaId) {
       await this.verificarInvernada(dto.invernadaId, atual.fazendaId);
     }
+    if (dto.rebanhoId) {
+      await this.verificarRebanho(dto.rebanhoId, atual.fazendaId);
+    }
 
     const dataUpdate: Prisma.AnimalUpdateInput = {
       ...(dto.brinco !== undefined ? { brinco: dto.brinco } : {}),
@@ -184,6 +192,9 @@ export class AnimalService {
       ...(dto.invernadaId !== undefined
         ? { invernadaId: dto.invernadaId ?? null }
         : {}),
+      ...(dto.rebanhoId !== undefined
+        ? { rebanhoId: dto.rebanhoId ?? null }
+        : {}),
     };
 
     // changes (com rótulo bonito)
@@ -193,7 +204,7 @@ export class AnimalService {
     const atualizado = await this.prisma.animal.update({
       where: { id },
       data: dataUpdate,
-      include: { fazenda: true, invernada: true },
+      include: { fazenda: true, invernada: true, rebanho: true },
     });
 
     // se veio novo peso, registra histórico de pesagem
@@ -262,7 +273,7 @@ export class AnimalService {
   async exportCSV(usuarioId: string) {
     const animais = await this.prisma.animal.findMany({
       where: { fazenda: { usuarios: { some: { usuarioId } } } },
-      include: { fazenda: true, invernada: true },
+      include: { fazenda: true, invernada: true, rebanho: true },
     });
 
     const parser = new Parser();
@@ -276,7 +287,7 @@ export class AnimalService {
   async exportPDF(usuarioId: string) {
     const animais = await this.prisma.animal.findMany({
       where: { fazenda: { usuarios: { some: { usuarioId } } } },
-      include: { fazenda: true, invernada: true },
+      include: { fazenda: true, invernada: true, rebanho: true },
     });
 
     const doc = new PDFDocument();
@@ -326,5 +337,12 @@ export class AnimalService {
       where: { id: invernadaId, fazendaId },
     });
     if (!invernada) throw new ForbiddenException('Invernada não encontrada nessa fazenda');
+  }
+
+  private async verificarRebanho(rebanhoId: string, fazendaId: string) {
+    const rebanho = await this.prisma.rebanho.findFirst({
+      where: { id: rebanhoId, fazendaId },
+    });
+    if (!rebanho) throw new ForbiddenException('Rebanho não encontrado nessa fazenda');
   }
 }
