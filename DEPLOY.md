@@ -17,8 +17,11 @@ aplica o que ainda não foi aplicado.
 - `JWT_SECRET` — segredo forte e aleatório (não reutilizar o antigo)
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` — envio de e-mail
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — login Google
-- `APPLE_BUNDLE_ID` — login Apple
-- `APP_SCHEME` — scheme do app mobile para o retorno do OAuth (ex.: `agrototal`)
+- `GOOGLE_CALLBACK_URL` — **obrigatória** para o login Google; deve ser
+  exatamente `https://<seu-backend>/auth/google/redirect` e estar cadastrada
+  como URI de redirecionamento autorizada no Google Cloud Console
+- `APPLE_BUNDLE_ID` — login Apple (default no código: `com.agrototal.app`)
+- `APP_SCHEME` — scheme do app mobile para o retorno do OAuth (default: `agrototal`)
 
 ## Aplicar a migration manualmente (opcional)
 
