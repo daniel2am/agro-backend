@@ -16,6 +16,10 @@ export class CreateLavouraDto {
   @IsDateString()
   dataPlantio: Date;
 
+  @IsOptional()
+  @IsString()
+  semente?: string;
+
   @IsEnum(StatusLavoura)
   @IsOptional()
   status?: StatusLavoura;

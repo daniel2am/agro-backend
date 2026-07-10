@@ -25,6 +25,7 @@ import { PesagemModule } from './modules/pesagem/pesagem.module';
 import { SanidadeModule } from './modules/sanidade/sanidade.module';
 import { NotificacaoModule } from './modules/notificacao/notificacao.module';
 import { RebanhoModule } from './modules/rebanho/rebanho.module';
+import { ProcedimentoLavouraModule } from './modules/procedimento-lavoura/procedimento-lavoura.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -36,6 +37,7 @@ import { HealthController } from './health/health.controller';
     UsuarioModule,
     NotificacaoModule,
     RebanhoModule,
+    ProcedimentoLavouraModule,
     SanidadeModule,
     PesagemModule,
     MarcaModeloModule,

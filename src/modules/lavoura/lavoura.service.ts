@@ -72,6 +72,7 @@ export class LavouraService {
         ...(data.nome !== undefined ? { nome: data.nome } : {}),
         ...(data.areaHa !== undefined ? { areaHa: data.areaHa } : {}),
         ...(data.cultura !== undefined ? { cultura: data.cultura } : {}),
+        ...(data.semente !== undefined ? { semente: data.semente } : {}),
       },
     });
 

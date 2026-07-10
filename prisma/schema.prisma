@@ -184,18 +184,36 @@ model Invernada {
 }
 
 model Lavoura {
-  id          String        @id @default(uuid())
-  nome        String
-  cultura     String
-  areaHa      Float
-  dataPlantio DateTime
-  status      StatusLavoura @default(ativo)
-  fazendaId   String
-  criadoEm    DateTime      @default(now())
-  fazenda     Fazenda       @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
-  financeiros Financeiro[]
+  id           String                @id @default(uuid())
+  nome         String
+  cultura      String
+  areaHa       Float
+  dataPlantio  DateTime
+  semente      String?
+  status       StatusLavoura         @default(ativo)
+  fazendaId    String
+  criadoEm     DateTime              @default(now())
+  fazenda      Fazenda               @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
+  financeiros  Financeiro[]
+  procedimentos ProcedimentoLavoura[]
 
   @@index([fazendaId, dataPlantio])
+}
+
+model ProcedimentoLavoura {
+  id          String   @id @default(uuid())
+  lavouraId   String
+  tipo        String // defensivo, irrigação, adubação, colheita, etc
+  data        DateTime
+  produto     String?
+  quantidade  String?
+  responsavel String?
+  observacoes String?
+  criadoEm    DateTime @default(now())
+
+  lavoura Lavoura @relation(fields: [lavouraId], references: [id], onDelete: Cascade)
+
+  @@index([lavouraId, data])
 }
 
 model MarcaModeloDispositivo {
