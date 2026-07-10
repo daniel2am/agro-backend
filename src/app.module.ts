@@ -23,6 +23,7 @@ import { ManejoModule } from './modules/manejo/manejo.module';
 import { MarcaModeloModule } from './modules/modelo-dispositivo/marca-modelo.module';
 import { PesagemModule } from './modules/pesagem/pesagem.module';
 import { SanidadeModule } from './modules/sanidade/sanidade.module';
+import { NotificacaoModule } from './modules/notificacao/notificacao.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -32,6 +33,7 @@ import { HealthController } from './health/health.controller';
 
     // feature modules
     UsuarioModule,
+    NotificacaoModule,
     SanidadeModule,
     PesagemModule,
     MarcaModeloModule,
