@@ -189,6 +189,41 @@ describe('FinanceiroService', () => {
     });
   });
 
+  describe('update — integridade dos vínculos', () => {
+    it('recusa editar o espelho de uma compra de insumo (evita divergir da compra)', async () => {
+      prisma.financeiro.findFirst.mockResolvedValue({
+        id: 'fin-1',
+        compraInsumoId: 'compra-1',
+      });
+
+      await expect(
+        service.update('fin-1', { valor: 999 } as any, USER_ID),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.financeiro.update).not.toHaveBeenCalled();
+    });
+
+    it('permite editar um lançamento comum', async () => {
+      prisma.financeiro.findFirst.mockResolvedValue({ id: 'fin-1', compraInsumoId: null });
+      prisma.financeiro.update.mockResolvedValue({ id: 'fin-1', tipo: 'despesa', valor: 50 });
+
+      await service.update('fin-1', { valor: 50, descricao: 'novo' } as any, USER_ID);
+
+      expect(prisma.financeiro.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'fin-1' },
+          data: expect.objectContaining({ valor: 50, descricao: 'novo' }),
+        }),
+      );
+    });
+
+    it('nega editar lançamento de outra fazenda', async () => {
+      prisma.financeiro.findFirst.mockResolvedValue(null);
+      await expect(
+        service.update('fin-1', { valor: 1 } as any, USER_ID),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
   describe('findAll — isolamento multi-tenant', () => {
     it('filtra sempre pelas fazendas do usuário autenticado', async () => {
       prisma.financeiro.findMany.mockResolvedValue([]);

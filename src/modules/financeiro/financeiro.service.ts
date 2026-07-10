@@ -171,9 +171,18 @@ export class FinanceiroService {
     // valida posse
     const exists = await this.prisma.financeiro.findFirst({
       where: { id, fazenda: { usuarios: { some: { usuarioId } } } },
-      select: { id: true },
+      select: { id: true, compraInsumoId: true },
     });
     if (!exists) throw new ForbiddenException('Acesso negado');
+
+    // Este lançamento é o espelho de uma CompraInsumo. Editar o valor aqui
+    // deixaria os dois registros divergentes — a edição tem que passar pela
+    // compra (PATCH /compra-insumo/:id), que atualiza os dois na mesma transação.
+    if (exists.compraInsumoId) {
+      throw new BadRequestException(
+        'Lançamento vinculado a uma compra de insumo. Edite pela compra para manter os valores consistentes.',
+      );
+    }
 
     // Alterar o vínculo de venda (animal/lavoura) depois de criado não é suportado:
     // para corrigir, remova o lançamento e crie um novo.
