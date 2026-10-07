@@ -41,6 +41,15 @@ export class CompraInsumoService {
     await this.assertAcessoFazenda(dto.fazendaId, user.id);
 
     const { compra } = await this.prisma.$transaction(async (tx) => {
+      // a lavoura que recebe o custo tem que ser desta fazenda
+      if (dto.lavouraId) {
+        const alvo = await tx.lavoura.findFirst({
+          where: { id: dto.lavouraId, fazendaId: dto.fazendaId },
+          select: { id: true },
+        });
+        if (!alvo) throw new ForbiddenException('Lavoura não pertence a esta fazenda');
+      }
+
       // 1) cria compra
       const compra = await tx.compraInsumo.create({
         data: {
@@ -64,6 +73,7 @@ export class CompraInsumoService {
           valor: dto.valor,
           tipo: 'despesa',
           categoria: 'insumos',
+          ...(dto.lavouraId ? { custoLavoura: { connect: { id: dto.lavouraId } } } : {}),
           compraInsumo: { connect: { id: compra.id } },
         },
       });

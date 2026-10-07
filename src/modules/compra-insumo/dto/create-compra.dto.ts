@@ -23,4 +23,9 @@ export class CreateCompraInsumoDto {
   @IsOptional()
   @IsString()
   fornecedor?: string;
+
+  // Lavoura que consome este insumo: o custo entra no resultado dela.
+  @IsOptional()
+  @IsUUID()
+  lavouraId?: string;
 }
