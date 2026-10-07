@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, HttpCode, NotFoundException, Patch, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, NotFoundException, Patch, Query, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { timingSafeEqual } from 'crypto';
 import { IsDateString, IsEmail, IsIn, IsOptional } from 'class-validator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -14,8 +14,8 @@ export class PlanoController {
 
   /** Plano em vigor, uso, limites e o catálogo de planos para a tela de upgrade. */
   @Get()
-  resumo(@AuthUser() user: UsuarioPayload) {
-    return this.planos.resumo(user.id);
+  resumo(@AuthUser() user: UsuarioPayload, @Query('fazendaId') fazendaId?: string) {
+    return this.planos.resumo(user.id, fazendaId || undefined);
   }
 }
 

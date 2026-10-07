@@ -162,6 +162,41 @@ describe('PlanoService', () => {
     });
   });
 
+  describe('resumo dentro de uma fazenda (plano do dono)', () => {
+    it('colaborador enxerga o plano e o uso do DONO, não os da própria conta', async () => {
+      prisma.fazendaUsuario.findFirst
+        .mockResolvedValueOnce({ id: 'vinculo' }) // é membro
+        .mockResolvedValueOnce({ usuarioId: 'dono' }); // administrador mais antigo
+      prisma.usuario.findUnique.mockImplementation(async ({ where }: any) =>
+        where.id === 'dono' ? { plano: 'avancado', planoAteEm: null } : { plano: 'basico', planoAteEm: null },
+      );
+      const r = await service.resumo('colab', 'f1');
+      expect(r.plano).toBe('avancado');
+      expect(r.daFazenda).toBe(true);
+      expect(prisma.usuario.findUnique.mock.calls.every((c: any) => c[0].where.id === 'dono')).toBe(true);
+      expect(prisma.fazendaUsuario.count.mock.calls[0][0].where.usuarioId).toBe('dono');
+    });
+
+    it('o próprio dono continua vendo o seu (daFazenda = false)', async () => {
+      prisma.fazendaUsuario.findFirst
+        .mockResolvedValueOnce({ id: 'v' })
+        .mockResolvedValueOnce({ usuarioId: USER });
+      comPlano('intermediario');
+      const r = await service.resumo(USER, 'f1');
+      expect(r.plano).toBe('intermediario');
+      expect(r.daFazenda).toBe(false);
+    });
+
+    it('quem NÃO é da fazenda não herda nada: cai no plano da própria conta', async () => {
+      prisma.fazendaUsuario.findFirst.mockResolvedValueOnce(null);
+      comPlano('basico');
+      const r = await service.resumo('intruso', 'f-alheia');
+      expect(r.plano).toBe('basico');
+      expect(r.daFazenda).toBe(false);
+      expect(prisma.fazendaUsuario.findFirst).toHaveBeenCalledTimes(1); // nem consulta o dono
+    });
+  });
+
   describe('definirPlano / teste gratuito', () => {
     it('básico limpa o vencimento', async () => {
       prisma.usuario.findUnique.mockResolvedValue({ id: USER });

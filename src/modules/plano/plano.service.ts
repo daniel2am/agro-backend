@@ -121,16 +121,28 @@ export class PlanoService {
   }
 
   /** Tudo o que o app precisa para mostrar plano, uso, limites e o que está bloqueado. */
-  async resumo(usuarioId: string) {
+  async resumo(usuarioId: string, fazendaId?: string) {
+    // Dentro de uma fazenda, vale o plano de QUEM PAGA por ela (o administrador):
+    // um colaborador convidado enxerga os recursos do dono, não os da própria conta.
+    let alvoId = usuarioId;
+    let daFazenda = false;
+    if (fazendaId) {
+      const vinculo = await this.prisma.fazendaUsuario.findFirst({ where: { fazendaId, usuarioId }, select: { id: true } });
+      if (vinculo) {
+        alvoId = await this.donoDaFazenda(fazendaId);
+        daFazenda = alvoId !== usuarioId;
+      }
+    }
+
     const u = await this.prisma.usuario.findUnique({
-      where: { id: usuarioId },
+      where: { id: alvoId },
       select: { plano: true, planoAteEm: true },
     });
     if (!u) throw new NotFoundException('Usuário não encontrado');
 
     const atual = planoEmVigor(u.plano as PlanoTipo, u.planoAteEm);
     const def = DEFINICOES[atual];
-    const uso = await this.usoDoUsuario(usuarioId);
+    const uso = await this.usoDoUsuario(alvoId);
     const diasRestantes =
       u.planoAteEm && atual !== 'basico'
         ? Math.max(0, Math.ceil((u.planoAteEm.getTime() - Date.now()) / 86_400_000))
@@ -143,6 +155,7 @@ export class PlanoService {
 
     return {
       plano: atual,
+      daFazenda, // true = plano herdado do dono da fazenda
       contratado: u.plano,
       nome: def.nome,
       venceEm: u.planoAteEm,

@@ -82,6 +82,7 @@ export class PesagemService {
   async findAll(usuarioId: string, query: any = {}) {
     const {
       animalId,
+      fazendaId, // opcional: restringe a uma fazenda
       inicio, // ISO
       fim,    // ISO
       take = 50,
@@ -89,7 +90,10 @@ export class PesagemService {
     } = query;
 
     const where: Prisma.PesagemWhereInput = {
-      animal: { fazenda: { usuarios: { some: { usuarioId } } } },
+      animal: {
+        ...(fazendaId ? { fazendaId: String(fazendaId) } : {}),
+        fazenda: { usuarios: { some: { usuarioId } } },
+      },
       ...(animalId ? { animalId } : {}),
       ...(inicio || fim
         ? {
