@@ -2,6 +2,7 @@
 import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 import { GroupBy, IndicadoresFiltro, IndicadoresResposta, TipoIndicador } from './dto/indicadores.dto';
+import { parseKeyVals } from './log-parser';
 
 type HistoricoItem = {
   tipo: string;
@@ -76,15 +77,7 @@ export class DashboardService {
   // =========================================================
 
   private parseKeyVals(acao: string): Record<string, string> {
-    const map: Record<string, string> = {};
-    const regex = /(\w+)=([^=\n\r]+)/g;
-    let m: RegExpExecArray | null;
-    while ((m = regex.exec(acao)) !== null) {
-      const k = m[1];
-      const v = m[2].trim();
-      map[k] = v;
-    }
-    return map;
+    return parseKeyVals(acao);
   }
 
   private normalizaLog(acao: string): { tipo: string; descricao: string; meta?: any } {
@@ -98,19 +91,29 @@ export class DashboardService {
     if (acao.startsWith('animal_criado')) {
       return {
         tipo: 'animal',
-        descricao: `✅ Criou animal — brinco=${kv.brinco ?? '—'}`,
+        descricao: `✅ Criou animal — brinco ${kv.brinco ?? '—'}`,
         meta: { ids: { animalId: kv.id }, animal: { brinco: kv.brinco ?? null } },
       };
     }
     if (acao.startsWith('animal_atualizado')) {
       return {
         tipo: 'animal_atualizado',
-        descricao: `✏️ Atualizou animal — brinco=${kv.brinco ?? '—'}`,
+        descricao: `✏️ Atualizou animal — brinco ${kv.brinco ?? '—'}`,
         meta: { ids: { animalId: kv.id }, animal: { brinco: kv.brinco ?? null }, changes },
       };
     }
     if (acao.startsWith('animal_excluido')) {
-      return { tipo: 'log', descricao: `🗑️ Excluiu animal — brinco=${kv.brinco ?? '—'}` };
+      return { tipo: 'log', descricao: `🗑️ Excluiu animal — brinco ${kv.brinco ?? '—'}` };
+    }
+
+    // pesagem (o animal vem em `animal=`; `id=` é o da pesagem)
+    if (acao.startsWith('pesagem_registrada') || acao.startsWith('pesagem_criada')) {
+      const peso = kv.pesoKg ? ` (${kv.pesoKg} kg)` : '';
+      return {
+        tipo: 'log',
+        descricao: `⚖️ Registrou pesagem — brinco ${kv.brinco ?? '—'}${peso}`,
+        meta: { ids: { animalId: kv.animal } },
+      };
     }
 
     // manejo
@@ -457,7 +460,10 @@ export class DashboardService {
 
     const logsSomenteDestaFazenda = logs.filter((l) => {
       const kv = this.parseKeyVals(l.acao);
-      if (kv.fazendaId) return kv.fazendaId === fazendaId;
+      // os logs gravam `fazenda=<id>` (alguns `fazendaId=`); antes só `fazendaId`
+      // era lido e nenhum log era filtrado — vazava ações de outras fazendas.
+      const fazendaDoLog = kv.fazendaId ?? kv.fazenda;
+      if (fazendaDoLog) return fazendaDoLog === fazendaId;
       if (l.acao.startsWith('fazenda_') && kv.id) return kv.id === fazendaId;
       return true;
     });
