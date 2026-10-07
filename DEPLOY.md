@@ -23,6 +23,22 @@ aplica o que ainda não foi aplicado.
 - `APPLE_BUNDLE_ID` — login Apple (default no código: `com.agrototal.app`)
 - `APP_SCHEME` — scheme do app mobile para o retorno do OAuth (default: `agrototal`)
 
+## Planos e cobrança
+
+- `TRIAL_DIAS` — dias de teste gratuito do plano Pro para novos cadastros (padrão `14`; `0` desliga).
+- `ADMIN_API_KEY` — **opcional**. Se definida, habilita `PATCH /admin/plano` (cabeçalho `x-admin-key`)
+  para liberar/trocar o plano de um usuário enquanto a cobrança é manual. Sem ela, a rota responde 404.
+  Use um valor longo e aleatório e guarde-o fora do repositório. Exemplo de uso:
+
+  ```bash
+  curl -X PATCH https://<seu-backend>/admin/plano \
+    -H "x-admin-key: $ADMIN_API_KEY" -H "Content-Type: application/json" \
+    -d '{"email":"cliente@exemplo.com","plano":"intermediario","ateEm":"2027-01-31T23:59:59Z"}'
+  ```
+
+  Planos: `basico`, `intermediario`, `avancado`. Sem `ateEm` o plano não vence. Plano vencido volta
+  ao básico (nada é apagado; só não é possível criar além dos limites).
+
 ## Aplicar a migration manualmente (opcional)
 
 Se preferir aplicar fora do deploy, de uma máquina com acesso ao banco:
