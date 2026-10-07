@@ -224,6 +224,96 @@ describe('FinanceiroService', () => {
     });
   });
 
+
+  describe('categoria e custo alocado em lavoura', () => {
+    it('grava categoria e custoLavouraId numa despesa válida', async () => {
+      prisma.lavoura.findFirst.mockResolvedValue({ id: 'l1' });
+      await service.create(
+        baseDto({ tipo: 'despesa', categoria: 'insumos', custoLavouraId: 'l1' }),
+        USER_ID,
+      );
+      expect(prisma.financeiro.create.mock.calls[0][0].data).toMatchObject({
+        categoria: 'insumos',
+        custoLavouraId: 'l1',
+        lavouraId: null, // alocar custo NÃO é vender: não mexe na área
+        areaVendidaHa: null,
+      });
+      expect(prisma.lavoura.update).not.toHaveBeenCalled();
+    });
+
+    it('só aceita alocar em lavoura quando é despesa', async () => {
+      await expect(
+        service.create(baseDto({ tipo: 'receita', custoLavouraId: 'l1' }), USER_ID),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('não mistura alocação de custo com venda', async () => {
+      await expect(
+        service.create(baseDto({ tipo: 'despesa', custoLavouraId: 'l1', animalId: 'a1' }), USER_ID),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('nega alocar em lavoura de outra fazenda', async () => {
+      prisma.lavoura.findFirst.mockResolvedValue(null);
+      await expect(
+        service.create(baseDto({ tipo: 'despesa', custoLavouraId: 'l-alheia' }), USER_ID),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.lavoura.findFirst.mock.calls[0][0].where).toEqual({
+        id: 'l-alheia',
+        fazendaId: FAZENDA_ID,
+      });
+    });
+
+    it('rejeita categoria de despesa numa receita (e vice-versa)', async () => {
+      await expect(
+        service.create(baseDto({ tipo: 'receita', categoria: 'racao' }), USER_ID),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        service.create(baseDto({ tipo: 'despesa', categoria: 'venda_gado' }), USER_ID),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('venda de gado e de lavoura ganham a categoria automaticamente', async () => {
+      prisma.animal.findFirst.mockResolvedValue({ id: 'a1', status: 'ativo' });
+      await service.create(baseDto({ animalId: 'a1' }), USER_ID);
+      expect(prisma.financeiro.create.mock.calls[0][0].data.categoria).toBe('venda_gado');
+
+      prisma.lavoura.findFirst.mockResolvedValue({ id: 'l1', areaHa: 50 });
+      await service.create(baseDto({ lavouraId: 'l1', areaVendidaHa: 10 }), USER_ID);
+      expect(prisma.financeiro.create.mock.calls[1][0].data.categoria).toBe('venda_lavoura');
+    });
+
+    it('update: não deixa virar receita um lançamento alocado em lavoura', async () => {
+      prisma.financeiro.findFirst.mockResolvedValue({
+        id: 'f1', compraInsumoId: null, fazendaId: FAZENDA_ID, tipo: 'despesa', custoLavouraId: 'l1',
+      });
+      await expect(service.update('f1', { tipo: 'receita' } as any, USER_ID)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it('update: troca a categoria e desfaz a alocação com null', async () => {
+      prisma.financeiro.findFirst.mockResolvedValue({
+        id: 'f1', compraInsumoId: null, fazendaId: FAZENDA_ID, tipo: 'despesa', custoLavouraId: 'l1',
+      });
+      prisma.financeiro.update.mockResolvedValue({ id: 'f1', tipo: 'despesa', valor: 1, descricao: 'x' });
+      await service.update('f1', { categoria: 'combustivel', custoLavouraId: null } as any, USER_ID);
+      expect(prisma.financeiro.update.mock.calls[0][0].data).toMatchObject({
+        categoria: 'combustivel',
+        custoLavouraId: null,
+      });
+    });
+
+    it('findAll aceita filtrar por categoria e por lavoura', async () => {
+      prisma.financeiro.findMany.mockResolvedValue([]);
+      prisma.financeiro.count.mockResolvedValue(0);
+      await service.findAll(USER_ID, { categoria: 'racao', custoLavouraId: 'l1' });
+      const where = prisma.financeiro.findMany.mock.calls[0][0].where;
+      expect(where.categoria).toBe('racao');
+      expect(where.custoLavouraId).toBe('l1');
+    });
+  });
+
   describe('findAll — isolamento multi-tenant', () => {
     it('filtra sempre pelas fazendas do usuário autenticado', async () => {
       prisma.financeiro.findMany.mockResolvedValue([]);

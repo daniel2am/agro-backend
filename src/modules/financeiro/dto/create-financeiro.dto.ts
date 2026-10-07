@@ -1,5 +1,6 @@
-import { IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, IsUUID } from 'class-validator';
+import { IsDateString, IsEnum, IsIn, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, IsUUID } from 'class-validator';
 import { TipoFinanceiro } from '@prisma/client';
+import { CATEGORIAS } from '../categorias';
 
 export class CreateFinanceiroDto {
   @IsUUID()
@@ -32,4 +33,14 @@ export class CreateFinanceiroDto {
   @IsNumber()
   @IsPositive()
   areaVendidaHa?: number;
+
+  // Categoria do lançamento (ração, vacina, combustível…)
+  @IsOptional()
+  @IsIn(CATEGORIAS as unknown as string[])
+  categoria?: string;
+
+  // Despesa alocada em uma lavoura (custo da safra). Só vale para tipo=despesa.
+  @IsOptional()
+  @IsUUID()
+  custoLavouraId?: string;
 }

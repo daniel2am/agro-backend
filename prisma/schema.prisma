@@ -154,12 +154,12 @@ model Animal {
 }
 
 model Rebanho {
-  id          String   @id @default(uuid())
-  fazendaId   String
-  nome        String
-  tipo        String? // cria, recria, engorda, vaca, touro, etc
-  observacoes String?
-  criadoEm    DateTime @default(now())
+  id           String   @id @default(uuid())
+  fazendaId    String
+  nome         String
+  tipo         String? // cria, recria, engorda, vaca, touro, etc
+  observacoes  String?
+  criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
   fazenda Fazenda  @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
@@ -172,6 +172,7 @@ model Invernada {
   id        String               @id @default(uuid())
   nome      String
   area      Float
+  descricao String?
   poligono  Json?
   status    StatusInvernada      @default(disponivel)
   fazendaId String
@@ -184,17 +185,18 @@ model Invernada {
 }
 
 model Lavoura {
-  id           String                @id @default(uuid())
-  nome         String
-  cultura      String
-  areaHa       Float
-  dataPlantio  DateTime
-  semente      String?
-  status       StatusLavoura         @default(ativo)
-  fazendaId    String
-  criadoEm     DateTime              @default(now())
-  fazenda      Fazenda               @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
-  financeiros  Financeiro[]
+  id            String                @id @default(uuid())
+  nome          String
+  cultura       String
+  areaHa        Float
+  dataPlantio   DateTime
+  semente       String?
+  status        StatusLavoura         @default(ativo)
+  fazendaId     String
+  criadoEm      DateTime              @default(now())
+  fazenda       Fazenda               @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
+  vendas        Financeiro[]          @relation("VendaDaLavoura")
+  custos        Financeiro[]          @relation("CustoDaLavoura")
   procedimentos ProcedimentoLavoura[]
 
   @@index([fazendaId, dataPlantio])
@@ -337,12 +339,21 @@ model Financeiro {
 
   // Venda de lavoura: subtrai areaVendidaHa da área total da lavoura
   lavouraId     String?
-  lavoura       Lavoura? @relation(fields: [lavouraId], references: [id], onDelete: SetNull)
+  lavoura       Lavoura? @relation("VendaDaLavoura", fields: [lavouraId], references: [id], onDelete: SetNull)
   areaVendidaHa Float?
+
+  // Categoria do lançamento (ração, vacina, combustível…). Texto livre validado no DTO.
+  categoria String?
+
+  // Despesa alocada em uma lavoura (custo da safra). Diferente de `lavouraId`, que
+  // significa VENDA e mexe na área da lavoura.
+  custoLavouraId String?
+  custoLavoura   Lavoura? @relation("CustoDaLavoura", fields: [custoLavouraId], references: [id], onDelete: SetNull)
 
   fazenda Fazenda @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
 
   @@index([fazendaId, data])
+  @@index([custoLavouraId])
   @@index([animalId])
   @@index([lavouraId])
   @@index([tipo])

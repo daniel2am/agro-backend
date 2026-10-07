@@ -25,6 +25,10 @@ export class CreateInvernadaDto {
   @IsString()
   nome: string;
 
+  @IsOptional()
+  @IsString()
+  descricao?: string;
+
   // área em hectares (number). O ValidationPipe converte "12.34" -> 12.34
   @Type(() => Number)
   @IsNumber()

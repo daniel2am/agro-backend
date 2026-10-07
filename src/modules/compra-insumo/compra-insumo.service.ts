@@ -63,6 +63,7 @@ export class CompraInsumoService {
           descricao: `Compra de ${dto.insumo}`,
           valor: dto.valor,
           tipo: 'despesa',
+          categoria: 'insumos',
           compraInsumo: { connect: { id: compra.id } },
         },
       });

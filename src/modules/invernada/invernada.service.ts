@@ -53,6 +53,7 @@ export class InvernadaService {
     const criada = await this.prisma.invernada.create({
       data: {
         nome: dto.nome,
+        descricao: dto.descricao?.trim() || null,
         area: dto.area,                    // hectares
         poligono: safePoly ?? undefined,   // JSON (se null/undefined não altera)
         fazendaId: dto.fazendaId,
@@ -119,6 +120,7 @@ export class InvernadaService {
 
     const data: any = {};
     if (dto.nome !== undefined) data.nome = dto.nome;
+    if (dto.descricao !== undefined) data.descricao = dto.descricao?.trim() || null;
     if (dto.area !== undefined) data.area = dto.area; // hectares
     if (dto.fazendaId !== undefined) data.fazendaId = dto.fazendaId;
     if (dto.poligono !== undefined) data.poligono = sanitizeCoords(dto.poligono) ?? undefined;

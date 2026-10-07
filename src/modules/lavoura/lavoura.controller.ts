@@ -20,6 +20,11 @@ export class LavouraController {
     return this.lavouraService.findAll(user.id);
   }
 
+  @Get(':id/resumo')
+  resumo(@Param('id') id: string, @AuthUser() user: UsuarioPayload) {
+    return this.lavouraService.resumo(id, user.id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string, @AuthUser() user: UsuarioPayload) {
     return this.lavouraService.findOne(id, user.id);

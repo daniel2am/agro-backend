@@ -8,6 +8,7 @@ import {
 import { PrismaService } from 'src/prisma.service';
 import { CreateFinanceiroDto } from './dto/create-financeiro.dto';
 import { UpdateFinanceiroDto } from './dto/update-financeiro.dto';
+import { ehCategoriaDeDespesa, ehCategoriaDeReceita } from './categorias';
 
 @Injectable()
 export class FinanceiroService {
@@ -33,6 +34,15 @@ export class FinanceiroService {
     return fazenda;
   }
 
+  /** Categoria de despesa não pode ficar numa receita e vice-versa. */
+  private assertCategoriaCompativel(tipo: string, categoria?: string | null) {
+    if (!categoria) return;
+    const ok = tipo === 'despesa' ? ehCategoriaDeDespesa(categoria) : ehCategoriaDeReceita(categoria);
+    if (!ok) {
+      throw new BadRequestException(`A categoria "${categoria}" não é válida para ${tipo}`);
+    }
+  }
+
   // ===== CRUD =====
   async create(dto: CreateFinanceiroDto, usuarioId: string) {
     await this.assertAcessoFazenda(dto.fazendaId, usuarioId);
@@ -45,7 +55,29 @@ export class FinanceiroService {
       throw new BadRequestException('Informe apenas animalId ou lavouraId, não os dois');
     }
 
+    if (dto.custoLavouraId) {
+      if (dto.tipo !== 'despesa') {
+        throw new BadRequestException('Só despesas podem ser alocadas em uma lavoura');
+      }
+      if (dto.animalId || dto.lavouraId) {
+        throw new BadRequestException('Despesa alocada em lavoura não pode ser também uma venda');
+      }
+    }
+
+    // vendas ganham a categoria automaticamente quando o usuário não escolhe
+    const categoria = dto.categoria ?? (dto.animalId ? 'venda_gado' : dto.lavouraId ? 'venda_lavoura' : undefined);
+    this.assertCategoriaCompativel(dto.tipo, categoria);
+
     const registro = await this.prisma.$transaction(async (tx) => {
+      // ===== Despesa alocada em lavoura: a lavoura tem que ser desta fazenda =====
+      if (dto.custoLavouraId) {
+        const alvo = await tx.lavoura.findFirst({
+          where: { id: dto.custoLavouraId, fazendaId: dto.fazendaId },
+          select: { id: true },
+        });
+        if (!alvo) throw new ForbiddenException('Lavoura não pertence a esta fazenda');
+      }
+
       // ===== Venda de gado: dá baixa automática no animal =====
       if (dto.animalId) {
         const animal = await tx.animal.findFirst({
@@ -99,6 +131,8 @@ export class FinanceiroService {
           animalId: dto.animalId ?? null,
           lavouraId: dto.lavouraId ?? null,
           areaVendidaHa: dto.lavouraId ? dto.areaVendidaHa : null,
+          categoria: categoria ?? null,
+          custoLavouraId: dto.custoLavouraId ?? null,
         },
       });
     });
@@ -122,11 +156,17 @@ export class FinanceiroService {
       fim,    // ISO opcional
       tipo,   // 'receita' | 'despesa' opcional
       fazendaId, // opcional: restringe a uma fazenda específica
+      categoria, // opcional
+      custoLavouraId, // opcional: despesas alocadas numa lavoura
+      lavouraId,      // opcional: vendas de uma lavoura
     } = query;
 
     const where: any = {
       fazenda: { usuarios: { some: { usuarioId } } },
       ...(fazendaId ? { fazendaId } : {}),
+      ...(categoria ? { categoria: String(categoria) } : {}),
+      ...(custoLavouraId ? { custoLavouraId: String(custoLavouraId) } : {}),
+      ...(lavouraId ? { lavouraId: String(lavouraId) } : {}),
     };
 
     if (search) {
@@ -171,7 +211,7 @@ export class FinanceiroService {
     // valida posse
     const exists = await this.prisma.financeiro.findFirst({
       where: { id, fazenda: { usuarios: { some: { usuarioId } } } },
-      select: { id: true, compraInsumoId: true },
+      select: { id: true, compraInsumoId: true, fazendaId: true, tipo: true, custoLavouraId: true },
     });
     if (!exists) throw new ForbiddenException('Acesso negado');
 
@@ -186,10 +226,27 @@ export class FinanceiroService {
 
     // Alterar o vínculo de venda (animal/lavoura) depois de criado não é suportado:
     // para corrigir, remova o lançamento e crie um novo.
+    const tipoFinal = dto.tipo ?? exists.tipo;
+    const custoFinal = dto.custoLavouraId !== undefined ? dto.custoLavouraId : exists.custoLavouraId;
+    if (custoFinal && tipoFinal !== 'despesa') {
+      throw new BadRequestException('Só despesas podem ser alocadas em uma lavoura');
+    }
+    if (dto.categoria) this.assertCategoriaCompativel(tipoFinal, dto.categoria);
+    if (dto.custoLavouraId) {
+      const alvo = await this.prisma.lavoura.findFirst({
+        where: { id: dto.custoLavouraId, fazendaId: exists.fazendaId },
+        select: { id: true },
+      });
+      if (!alvo) throw new ForbiddenException('Lavoura não pertence a esta fazenda');
+    }
+
     const dataUpdate: any = {
       ...(dto.descricao !== undefined ? { descricao: dto.descricao } : {}),
       ...(dto.valor !== undefined ? { valor: dto.valor } : {}),
       ...(dto.tipo !== undefined ? { tipo: dto.tipo } : {}),
+      // null limpa o campo (desfaz a categoria / a alocação na lavoura)
+      ...(dto.categoria !== undefined ? { categoria: dto.categoria ?? null } : {}),
+      ...(dto.custoLavouraId !== undefined ? { custoLavouraId: dto.custoLavouraId ?? null } : {}),
     };
     if (dto.data !== undefined) {
       const d = new Date(dto.data);
