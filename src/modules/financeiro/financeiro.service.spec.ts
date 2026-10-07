@@ -315,6 +315,15 @@ describe('FinanceiroService', () => {
   });
 
   describe('findAll — isolamento multi-tenant', () => {
+    it('colaborador não acessa o financeiro: só administrador e gestor entram no filtro', async () => {
+      prisma.financeiro.findMany.mockResolvedValue([]);
+      prisma.financeiro.count.mockResolvedValue(0);
+      await service.findAll(USER_ID);
+      const papeis = prisma.financeiro.findMany.mock.calls[0][0].where.fazenda.usuarios.some.papel.in;
+      expect(papeis).toEqual(['administrador', 'gestor']);
+      expect(papeis).not.toContain('colaborador');
+    });
+
     it('filtra sempre pelas fazendas do usuário autenticado', async () => {
       prisma.financeiro.findMany.mockResolvedValue([]);
       prisma.financeiro.count.mockResolvedValue(0);
@@ -323,7 +332,7 @@ describe('FinanceiroService', () => {
 
       const whereArg = prisma.financeiro.findMany.mock.calls[0][0].where;
       expect(whereArg.fazenda).toEqual({
-        usuarios: { some: { usuarioId: USER_ID } },
+        usuarios: { some: { usuarioId: USER_ID, papel: { in: ['administrador', 'gestor'] } } },
       });
     });
   });

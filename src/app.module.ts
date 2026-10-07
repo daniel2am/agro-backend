@@ -26,6 +26,9 @@ import { SanidadeModule } from './modules/sanidade/sanidade.module';
 import { NotificacaoModule } from './modules/notificacao/notificacao.module';
 import { RebanhoModule } from './modules/rebanho/rebanho.module';
 import { ProcedimentoLavouraModule } from './modules/procedimento-lavoura/procedimento-lavoura.module';
+import { PlanoModule } from './modules/plano/plano.module';
+import { EquipeModule } from './modules/equipe/equipe.module';
+import { RelatorioModule } from './modules/relatorio/relatorio.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -35,6 +38,9 @@ import { HealthController } from './health/health.controller';
 
     // feature modules
     UsuarioModule,
+    PlanoModule,
+    EquipeModule,
+    RelatorioModule,
     NotificacaoModule,
     RebanhoModule,
     ProcedimentoLavouraModule,

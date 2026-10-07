@@ -6,10 +6,11 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
+import { PlanoService } from '../plano/plano.service';
 import { CreateAnimalDto } from './dto/create-animal.dto';
 import { UpdateAnimalDto } from './dto/update-animal.dto';
 import { Parser } from 'json2csv';
-import * as PDFDocument from 'pdfkit';
+import PDFDocument from 'pdfkit';
 import * as streamBuffers from 'stream-buffers';
 import { Prisma } from '@prisma/client';
 import { extractChanges } from 'src/common/utils/extract-changes';
@@ -18,7 +19,10 @@ import { extractChanges } from 'src/common/utils/extract-changes';
 export class AnimalService {
   private readonly logger = new Logger(AnimalService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly planos: PlanoService,
+  ) {}
 
   private async safeLog(usuarioId: string, acao: string) {
     try {
@@ -51,6 +55,7 @@ export class AnimalService {
   async create(dto: CreateAnimalDto, usuarioId: string) {
     // acesso
     await this.verificarAcessoAFazenda(dto.fazendaId, usuarioId);
+    await this.planos.assertLimiteDaFazenda(dto.fazendaId, 'animais');
 
     // invernada (quando enviada) tem que pertencer à mesma fazenda
     if (dto.invernadaId) {

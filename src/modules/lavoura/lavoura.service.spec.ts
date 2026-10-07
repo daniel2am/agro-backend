@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { LavouraService } from './lavoura.service';
 import { PrismaService } from 'src/prisma.service';
+import { PlanoService } from '../plano/plano.service';
 
 const USER = 'user-1';
 const LAVOURA = 'lav-1';
@@ -26,7 +27,11 @@ describe('LavouraService.resumo', () => {
       procedimentoLavoura: { groupBy: jest.fn().mockResolvedValue([]) },
     };
     const moduleRef: TestingModule = await Test.createTestingModule({
-      providers: [LavouraService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        LavouraService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: PlanoService, useValue: { assertLimiteDaFazenda: jest.fn() } },
+      ],
     }).compile();
     service = moduleRef.get(LavouraService);
   });

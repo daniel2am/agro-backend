@@ -36,3 +36,29 @@ export const ehCategoriaDeDespesa = (c: string) =>
 
 export const ehCategoriaDeReceita = (c: string) =>
   (CATEGORIAS_RECEITA as readonly string[]).includes(c);
+
+/** Rótulos para relatórios (o app tem os seus; aqui só o necessário para o PDF). */
+export const ROTULOS_CATEGORIA: Record<string, string> = {
+  racao: 'Ração e suplementos',
+  sanidade: 'Sanidade e veterinário',
+  insumos: 'Insumos agrícolas',
+  sementes: 'Sementes e mudas',
+  combustivel: 'Combustível',
+  mao_de_obra: 'Mão de obra',
+  manutencao: 'Manutenção e peças',
+  energia: 'Energia',
+  frete: 'Frete e transporte',
+  arrendamento: 'Arrendamento',
+  impostos: 'Impostos e taxas',
+  compra_animais: 'Compra de animais',
+  outros_despesa: 'Outras despesas',
+  venda_gado: 'Venda de gado',
+  venda_lavoura: 'Venda de lavoura',
+  leite: 'Leite',
+  servicos: 'Serviços prestados',
+  arrendamento_recebido: 'Arrendamento recebido',
+  outros_receita: 'Outras receitas',
+};
+
+export const rotuloCategoria = (slug: string | null | undefined, tipo: 'receita' | 'despesa') =>
+  (slug && ROTULOS_CATEGORIA[slug]) || (tipo === 'receita' ? 'Receitas sem categoria' : 'Despesas sem categoria');

@@ -2,12 +2,16 @@
 import { Injectable, ForbiddenException, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
 import { CreateLavouraDto, UpdateLavouraDto } from './dto';
+import { PlanoService } from '../plano/plano.service';
 
 @Injectable()
 export class LavouraService {
   private readonly logger = new Logger(LavouraService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly planos: PlanoService,
+  ) {}
 
   // ===== Helpers =====
   private async safeLog(usuarioId: string, acao: string) {
@@ -29,6 +33,7 @@ export class LavouraService {
   // ===== CRUD =====
   async create(data: CreateLavouraDto, usuarioId: string) {
     await this.assertAcessoFazenda(data.fazendaId, usuarioId);
+    await this.planos.assertLimiteDaFazenda(data.fazendaId, 'areas');
 
     const lavoura = await this.prisma.lavoura.create({
       data: { ...data, dataPlantio: new Date(data.dataPlantio) },

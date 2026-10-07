@@ -22,9 +22,11 @@ export class DashboardService {
     // 1) Check de acesso
     const acesso = await this.prisma.fazendaUsuario.findFirst({
       where: { fazendaId, usuarioId },
-      select: { id: true },
+      select: { id: true, papel: true },
     });
     if (!acesso) throw new ForbiddenException('Acesso negado à fazenda');
+    // colaborador não vê números financeiros
+    const ocultarFinanceiro = acesso.papel === 'colaborador';
 
     // 2) Intervalos auxiliares (últimos 7 dias)
     const hoje = new Date();
@@ -59,14 +61,15 @@ export class DashboardService {
 
     return {
       totalAnimais,
-      totalReceitas,
-      totalDespesas,
+      totalReceitas: ocultarFinanceiro ? 0 : totalReceitas,
+      totalDespesas: ocultarFinanceiro ? 0 : totalDespesas,
+      financeiroOculto: ocultarFinanceiro,
       totalNotificacoes,
-      saldo,
+      saldo: ocultarFinanceiro ? 0 : saldo,
       totalHectares,
       ultimos7d: {
         novosAnimais: novosAnimais7d,
-        novosLancamentosFinanceiros: novosLancamentos7d,
+        novosLancamentosFinanceiros: ocultarFinanceiro ? 0 : novosLancamentos7d,
         novasOcorrencias: novasOcorrencias7d,
       },
     };

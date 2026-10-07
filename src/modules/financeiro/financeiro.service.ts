@@ -9,6 +9,7 @@ import { PrismaService } from 'src/prisma.service';
 import { CreateFinanceiroDto } from './dto/create-financeiro.dto';
 import { UpdateFinanceiroDto } from './dto/update-financeiro.dto';
 import { ehCategoriaDeDespesa, ehCategoriaDeReceita } from './categorias';
+import { PAPEIS_FINANCEIRO } from '../equipe/equipe.service';
 
 @Injectable()
 export class FinanceiroService {
@@ -27,7 +28,7 @@ export class FinanceiroService {
 
   private async assertAcessoFazenda(fazendaId: string, usuarioId: string) {
     const fazenda = await this.prisma.fazenda.findFirst({
-      where: { id: fazendaId, usuarios: { some: { usuarioId } } },
+      where: { id: fazendaId, usuarios: { some: { usuarioId, papel: { in: PAPEIS_FINANCEIRO } } } },
       select: { id: true },
     });
     if (!fazenda) throw new ForbiddenException('Acesso negado à fazenda');
@@ -162,7 +163,7 @@ export class FinanceiroService {
     } = query;
 
     const where: any = {
-      fazenda: { usuarios: { some: { usuarioId } } },
+      fazenda: { usuarios: { some: { usuarioId, papel: { in: PAPEIS_FINANCEIRO } } } },
       ...(fazendaId ? { fazendaId } : {}),
       ...(categoria ? { categoria: String(categoria) } : {}),
       ...(custoLavouraId ? { custoLavouraId: String(custoLavouraId) } : {}),
@@ -199,7 +200,7 @@ export class FinanceiroService {
     const financeiro = await this.prisma.financeiro.findFirst({
       where: {
         id,
-        fazenda: { usuarios: { some: { usuarioId } } },
+        fazenda: { usuarios: { some: { usuarioId, papel: { in: PAPEIS_FINANCEIRO } } } },
       },
     });
 
@@ -210,7 +211,7 @@ export class FinanceiroService {
   async update(id: string, dto: UpdateFinanceiroDto, usuarioId: string) {
     // valida posse
     const exists = await this.prisma.financeiro.findFirst({
-      where: { id, fazenda: { usuarios: { some: { usuarioId } } } },
+      where: { id, fazenda: { usuarios: { some: { usuarioId, papel: { in: PAPEIS_FINANCEIRO } } } } },
       select: { id: true, compraInsumoId: true, fazendaId: true, tipo: true, custoLavouraId: true },
     });
     if (!exists) throw new ForbiddenException('Acesso negado');
@@ -270,7 +271,7 @@ export class FinanceiroService {
   async remove(id: string, usuarioId: string) {
     // valida posse
     const registro = await this.prisma.financeiro.findFirst({
-      where: { id, fazenda: { usuarios: { some: { usuarioId } } } },
+      where: { id, fazenda: { usuarios: { some: { usuarioId, papel: { in: PAPEIS_FINANCEIRO } } } } },
     });
     if (!registro) throw new ForbiddenException('Acesso negado');
 

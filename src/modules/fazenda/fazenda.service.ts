@@ -11,12 +11,16 @@ import { PrismaService } from 'src/prisma.service';
 import { CreateFazendaDto } from './dto/create-fazenda.dto';
 import { UpdateFazendaDto } from './dto/update-fazenda.dto';
 import { PapelUsuarioFazenda, Prisma } from '@prisma/client';
+import { PlanoService } from '../plano/plano.service';
 
 @Injectable()
 export class FazendaService {
   private readonly logger = new Logger(FazendaService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly planos: PlanoService,
+  ) {}
 
   // log que não quebra o fluxo
   private async safeLog(usuarioId: string, acao: string) {
@@ -29,6 +33,9 @@ export class FazendaService {
 
   async create(data: CreateFazendaDto, usuarioId: string) {
     if (!usuarioId) throw new BadRequestException('Usuário não autenticado');
+
+    // plano: quantas propriedades o usuário pode administrar
+    await this.planos.assertLimite(usuarioId, 'fazendas');
 
     try {
       const fazenda = await this.prisma.fazenda.create({

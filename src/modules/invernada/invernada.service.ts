@@ -1,6 +1,7 @@
 // src/modules/invernada/invernada.service.ts
 import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
+import { PlanoService } from '../plano/plano.service';
 import { CreateInvernadaDto } from './dto/create-invernada.dto';
 import { UpdateInvernadaDto } from './dto/update-invernada.dto';
 
@@ -25,7 +26,10 @@ function sanitizeCoords(points?: LatLng[]): LatLng[] | undefined {
 export class InvernadaService {
   private readonly logger = new Logger(InvernadaService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly planos: PlanoService,
+  ) {}
 
   // ===== helpers =====
   private async safeLog(usuarioId: string, acao: string) {
@@ -48,6 +52,7 @@ export class InvernadaService {
   async create(dto: CreateInvernadaDto, usuarioId: string) {
     // garante que a fazenda é do usuário
     await this.assertAcessoFazenda(dto.fazendaId, usuarioId);
+    await this.planos.assertLimiteDaFazenda(dto.fazendaId, 'areas');
 
     const safePoly = sanitizeCoords(dto.poligono);
     const criada = await this.prisma.invernada.create({

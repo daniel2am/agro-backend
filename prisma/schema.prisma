@@ -55,6 +55,12 @@ enum PapelUsuarioFazenda {
   colaborador
 }
 
+enum PlanoTipo {
+  basico
+  intermediario
+  avancado
+}
+
 enum TipoFinanceiro {
   receita
   despesa
@@ -78,6 +84,7 @@ model Fazenda {
   criadoEm      DateTime      @default(now())
 
   usuarios     FazendaUsuario[]
+  convites     ConviteFazenda[]
   invernadas   Invernada[]
   lavouras     Lavoura[]
   animais      Animal[]
@@ -286,13 +293,35 @@ model Usuario {
   resetTokenExpires DateTime?
   termosAceitosEm   DateTime?
 
-  fazendas     FazendaUsuario[]
-  acessos      LogAcesso[]
-  dispositivos Dispositivo[]
-  leituras     LeituraDispositivo[]
-  compras      CompraInsumo[]
+  // Plano comercial. `planoAteEm` nulo = sem vencimento; vencido equivale a básico.
+  plano      PlanoTipo @default(basico)
+  planoAteEm DateTime?
+
+  convitesEnviados ConviteFazenda[]
+  fazendas         FazendaUsuario[]
+  acessos          LogAcesso[]
+  dispositivos     Dispositivo[]
+  leituras         LeituraDispositivo[]
+  compras          CompraInsumo[]
 
   @@index([status])
+}
+
+// Convite para entrar numa fazenda, feito por e-mail. Se a pessoa ainda não tem
+// conta, fica pendente e é aceito automaticamente quando ela se cadastrar.
+model ConviteFazenda {
+  id             String              @id @default(uuid())
+  fazendaId      String
+  email          String
+  papel          PapelUsuarioFazenda
+  convidadoPorId String
+  criadoEm       DateTime            @default(now())
+
+  fazenda      Fazenda @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
+  convidadoPor Usuario @relation(fields: [convidadoPorId], references: [id], onDelete: Cascade)
+
+  @@unique([fazendaId, email])
+  @@index([email])
 }
 
 model LogAcesso {

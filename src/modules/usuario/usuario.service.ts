@@ -5,6 +5,8 @@ import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
 import * as bcrypt from 'bcryptjs';
 import { Prisma, TipoUsuario } from '@prisma/client';
+import { PlanoService } from '../plano/plano.service';
+import { EquipeService } from '../equipe/equipe.service';
 
 const SAFE_SELECT = {
   id: true,
@@ -21,19 +23,32 @@ const SAFE_SELECT = {
 
 @Injectable()
 export class UsuarioService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly equipe: EquipeService,
+  ) {}
 
   // Retorna o registro completo (incluindo hash da senha) porque o AuthService
   // precisa dele internamente (ex.: comparar/atualizar appleId). Quem expõe
   // isso a um cliente HTTP deve remover o campo `senha` antes de responder.
   async create(data: CreateUsuarioDto) {
     const senhaHash = await bcrypt.hash(data.senha, 10);
-    return this.prisma.usuario.create({
+    const usuario = await this.prisma.usuario.create({
       data: {
         ...data,
         senha: senhaHash,
+        // teste gratuito do plano completo (TRIAL_DIAS; 0 desliga)
+        ...PlanoService.dadosDoTeste(),
       },
     });
+
+    // quem foi convidado para uma fazenda antes de ter conta entra nela agora
+    try {
+      await this.equipe.aceitarConvitesPendentes(usuario.id, usuario.email);
+    } catch {
+      // não derruba o cadastro: o convite continua pendente e vale no próximo acesso
+    }
+    return usuario;
   }
 
   async findAll() {
