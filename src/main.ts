@@ -1,10 +1,14 @@
 // src/main.ts
-import { NestFactory } from '@nestjs/core';
+import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
 import compression from 'compression';
+import { iniciarSentry } from './common/monitoring/sentry';
+import { ErrosFilter } from './common/monitoring/erros.filter';
+
+iniciarSentry();
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -25,6 +29,9 @@ async function bootstrap() {
   // Segurança e performance
   app.use(helmet());
   app.use(compression());
+
+  // Registra erros de servidor (log + Sentry quando SENTRY_DSN existe)
+  app.useGlobalFilters(new ErrosFilter(app.get(HttpAdapterHost).httpAdapter));
 
   // Validação global
   app.useGlobalPipes(

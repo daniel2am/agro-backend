@@ -46,3 +46,21 @@ Se preferir aplicar fora do deploy, de uma máquina com acesso ao banco:
 ```bash
 npx prisma migrate deploy
 ```
+
+## Monitoramento
+
+- `SENTRY_DSN` — **opcional**. Com ele, todo erro de servidor (5xx) vai para o Sentry (sem corpo das
+  requisições, IP ou cookies). Crie um projeto "Node.js" em sentry.io e copie o DSN. Sem a variável,
+  os erros continuam no log do Render.
+- Uptime: aponte um monitor (UptimeRobot, Better Stack — planos gratuitos servem) para
+  `GET /health/db`. Responde 200 se a API e o banco estão no ar e 503 se o banco falhar.
+  (`GET /health` não toca o banco; é o que o Render usa.)
+
+## Páginas legais e exclusão de conta
+
+- `GET /privacidade` e `GET /termos` são as URLs públicas para as lojas (App Store / Google Play).
+  O texto é uma base e **precisa de revisão jurídica**. Defina `LEGAL_RAZAO_SOCIAL`, `LEGAL_CNPJ` e
+  `LEGAL_EMAIL_CONTATO` para aparecerem como responsável/contato.
+- `DELETE /usuarios/me` (corpo `{ "senha": "..." }`; contas Google/Apple dispensam a senha) apaga a
+  conta. Fazendas em que a pessoa era a única são apagadas; em fazendas com equipe, o integrante mais
+  antigo (gestor antes de colaborador) vira administrador e herda os registros criados por ela.

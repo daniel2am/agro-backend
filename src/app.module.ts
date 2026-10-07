@@ -30,6 +30,7 @@ import { PlanoModule } from './modules/plano/plano.module';
 import { EquipeModule } from './modules/equipe/equipe.module';
 import { RelatorioModule } from './modules/relatorio/relatorio.module';
 import { HealthController } from './health/health.controller';
+import { LegalController } from './legal/legal.controller';
 
 @Module({
   imports: [
@@ -84,7 +85,7 @@ import { HealthController } from './health/health.controller';
       }),
     }),
   ],
-  controllers: [HealthController],
+  controllers: [HealthController, LegalController],
   providers: [PrismaService],
 })
 export class AppModule {}
