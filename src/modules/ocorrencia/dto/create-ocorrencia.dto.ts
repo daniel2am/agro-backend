@@ -13,8 +13,9 @@ export class CreateOcorrenciaDto {
   descricao?: string;
 
   @ApiProperty({ example: '2025-07-25T08:00:00.000Z' })
+  // string (e não Date): ver nota em create-lavoura.dto.ts sobre enableImplicitConversion
   @IsDateString()
-  data: Date;
+  data: string;
 
   @ApiProperty({ example: 'Sanidade', description: 'Tipo da ocorrência' })
   @IsString()

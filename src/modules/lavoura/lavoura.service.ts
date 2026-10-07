@@ -30,7 +30,9 @@ export class LavouraService {
   async create(data: CreateLavouraDto, usuarioId: string) {
     await this.assertAcessoFazenda(data.fazendaId, usuarioId);
 
-    const lavoura = await this.prisma.lavoura.create({ data });
+    const lavoura = await this.prisma.lavoura.create({
+      data: { ...data, dataPlantio: new Date(data.dataPlantio) },
+    });
 
     // log para histórico (padrão key=value que já usamos)
     await this.safeLog(
