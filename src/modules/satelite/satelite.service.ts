@@ -103,6 +103,7 @@ export class SateliteService {
 
     return {
       provedorConfigurado: this.provedor.configurado(),
+      demonstracao: this.provedor.demonstracao?.() ?? false,
       precisaAtualizar: precisaAtualizar && this.provedor.configurado(),
       alvos: monitorados,
       semPerimetro: alvos.filter((a) => !a.poligono).map((a) => ({ tipo: a.tipo, id: a.id, nome: a.nome })),

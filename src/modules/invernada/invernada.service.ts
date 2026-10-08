@@ -63,7 +63,7 @@ export class InvernadaService {
         poligono: safePoly ?? undefined,   // JSON (se null/undefined não altera)
         fazendaId: dto.fazendaId,
       },
-      include: { _count: { select: { animais: true } } },
+      include: { _count: { select: { animais: { where: { status: 'ativo' } } } } },
     });
 
     await this.safeLog(
@@ -82,7 +82,7 @@ export class InvernadaService {
         fazendaId,
         fazenda: { usuarios: { some: { usuarioId } } },
       },
-      include: { _count: { select: { animais: true } } },
+      include: { _count: { select: { animais: { where: { status: 'ativo' } } } } },
       orderBy: { nome: 'asc' },
     });
   }
@@ -96,7 +96,7 @@ export class InvernadaService {
       },
       include: {
         fazenda: true,
-        _count: { select: { animais: true } },
+        _count: { select: { animais: { where: { status: 'ativo' } } } },
       },
       orderBy: { nome: 'asc' },
     });
@@ -106,7 +106,7 @@ export class InvernadaService {
   async findOne(id: string, usuarioId: string) {
     const invernada = await this.prisma.invernada.findFirst({
       where: { id, fazenda: { usuarios: { some: { usuarioId } } } },
-      include: { _count: { select: { animais: true } } },
+      include: { _count: { select: { animais: { where: { status: 'ativo' } } } } },
     });
     if (!invernada) {
       throw new NotFoundException('Invernada não encontrada ou acesso negado');
@@ -133,7 +133,7 @@ export class InvernadaService {
     const atualizada = await this.prisma.invernada.update({
       where: { id },
       data,
-      include: { _count: { select: { animais: true } } },
+      include: { _count: { select: { animais: { where: { status: 'ativo' } } } } },
     });
 
     await this.safeLog(

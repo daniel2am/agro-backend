@@ -21,6 +21,8 @@ export interface PedidoNdvi {
 
 export interface ProvedorNdvi {
   configurado(): boolean;
+  /** true = leituras sintéticas de demonstração (o app avisa na tela). */
+  demonstracao?(): boolean;
   estatisticas(p: PedidoNdvi): Promise<PontoNdvi[]>;
 }
 

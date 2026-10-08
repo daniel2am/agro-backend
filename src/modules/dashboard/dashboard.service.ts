@@ -32,6 +32,8 @@ export class DashboardService {
     const hoje = new Date();
     const seteDiasAtras = new Date(hoje);
     seteDiasAtras.setDate(hoje.getDate() - 7);
+    const trintaDias = new Date(hoje);
+    trintaDias.setDate(hoje.getDate() + 30);
 
     // 3) Coletas paralelas
     const [
@@ -44,11 +46,17 @@ export class DashboardService {
       novosLancamentos7d,
       novasOcorrencias7d,
     ] = await Promise.all([
-      this.prisma.animal.count({ where: { fazendaId } }),
+      // só animais ativos: os vendidos/baixados não contam no rebanho
+      this.prisma.animal.count({ where: { fazendaId, status: 'ativo' } }),
       this.prisma.financeiro.aggregate({ where: { fazendaId, tipo: 'receita' }, _sum: { valor: true } }),
       this.prisma.financeiro.aggregate({ where: { fazendaId, tipo: 'despesa' }, _sum: { valor: true } }),
-      this.prisma.ocorrencia.count({ where: { fazendaId } }).catch(() => 0),
-      this.prisma.lavoura.aggregate({ where: { fazendaId }, _sum: { areaHa: true } }),
+      // mesmos avisos da Central de Notificações: reforços de vacina/medicamento vencidos ou nos próximos 30 dias
+      this.prisma.medicamento
+        .count({
+          where: { lembreteAtivo: true, proximaAplicacao: { lte: trintaDias }, animal: { fazendaId, status: 'ativo' } },
+        })
+        .catch(() => 0),
+      this.prisma.lavoura.aggregate({ where: { fazendaId, status: 'ativo' }, _sum: { areaHa: true } }),
       this.prisma.animal.count({ where: { fazendaId, criadoEm: { gte: seteDiasAtras, lte: hoje } } }),
       this.prisma.financeiro.count({ where: { fazendaId, data: { gte: seteDiasAtras, lte: hoje } } }),
       this.prisma.ocorrencia.count({ where: { fazendaId, data: { gte: seteDiasAtras, lte: hoje } } }).catch(() => 0),

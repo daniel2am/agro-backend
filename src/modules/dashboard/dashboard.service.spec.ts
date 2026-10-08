@@ -128,3 +128,44 @@ describe('DashboardService — histórico a partir dos logs', () => {
     expect(itens).toHaveLength(1);
   });
 });
+
+/**
+ * Números dos cartões: rebanho só com animais ativos, lavoura só ativa e notificações
+ * iguais às da Central (reforços de vacina), não às ocorrências.
+ */
+describe('DashboardService — cartões do resumo', () => {
+  let service: DashboardService;
+  let prisma: any;
+
+  beforeEach(async () => {
+    prisma = {
+      fazendaUsuario: { findFirst: jest.fn().mockResolvedValue({ id: 'v', papel: 'administrador' }) },
+      animal: { count: jest.fn().mockResolvedValue(7) },
+      financeiro: { aggregate: jest.fn().mockResolvedValue({ _sum: { valor: 0 } }), count: jest.fn().mockResolvedValue(0) },
+      medicamento: { count: jest.fn().mockResolvedValue(2) },
+      ocorrencia: { count: jest.fn().mockResolvedValue(0) },
+      lavoura: { aggregate: jest.fn().mockResolvedValue({ _sum: { areaHa: 200 } }) },
+    };
+    const moduleRef: TestingModule = await Test.createTestingModule({
+      providers: [DashboardService, { provide: PrismaService, useValue: prisma }],
+    }).compile();
+    service = moduleRef.get(DashboardService);
+  });
+
+  it('conta só animais ativos e lavouras ativas', async () => {
+    await service.getResumoDaFazenda(FAZENDA_ID, USER_ID);
+    expect(prisma.animal.count.mock.calls[0][0].where).toEqual({ fazendaId: FAZENDA_ID, status: 'ativo' });
+    expect(prisma.lavoura.aggregate.mock.calls[0][0].where).toEqual({ fazendaId: FAZENDA_ID, status: 'ativo' });
+  });
+
+  it('notificações = reforços de vacina da fazenda (vencidos + próximos 30 dias), não ocorrências', async () => {
+    const r = await service.getResumoDaFazenda(FAZENDA_ID, USER_ID);
+    expect(r.totalNotificacoes).toBe(2);
+    const where = prisma.medicamento.count.mock.calls[0][0].where;
+    expect(where.lembreteAtivo).toBe(true);
+    expect(where.animal).toEqual({ fazendaId: FAZENDA_ID, status: 'ativo' });
+    const dias = (where.proximaAplicacao.lte.getTime() - Date.now()) / 86_400_000;
+    expect(dias).toBeGreaterThan(29);
+    expect(dias).toBeLessThan(31);
+  });
+});
