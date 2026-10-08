@@ -11,6 +11,10 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(email: string, senha: string) {
+    // o guard roda antes do ValidationPipe: o byte nulo não pode chegar ao Postgres (viraria 500)
+    if (email.includes('\u0000') || senha.includes('\u0000')) {
+      throw new UnauthorizedException('Credenciais inválidas');
+    }
     const user = await this.authService.validateUser(email, senha);
     if (!user) {
       throw new UnauthorizedException('Credenciais inválidas');
