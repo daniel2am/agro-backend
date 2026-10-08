@@ -52,7 +52,12 @@ export class CloudApiCliente implements ClienteWhatsapp {
         body: JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', ...corpo }),
         signal: AbortSignal.timeout(15_000),
       });
-      if (!r.ok) this.logger.warn(`Envio recusado pela Meta (${r.status}).`);
+      if (!r.ok) {
+        // só o código e o título do erro da Meta (nunca o corpo da mensagem nem o token)
+        const erro = ((await r.json().catch(() => null)) as { error?: { code?: number; error_subcode?: number; type?: string } } | null)?.error;
+        const detalhe = erro ? ` código ${erro.code ?? '?'}${erro.error_subcode ? `/${erro.error_subcode}` : ''} (${erro.type ?? 'erro'})` : '';
+        this.logger.warn(`Envio recusado pela Meta (${r.status})${detalhe}.`);
+      }
       return r.ok;
     } catch (e) {
       this.logger.warn(`Falha ao enviar pelo WhatsApp: ${(e as Error).message}`);
