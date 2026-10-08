@@ -29,9 +29,14 @@ export class WhatsappController {
   receber(@Req() req: RawBodyRequest<Request>, @Headers('x-hub-signature-256') assinatura: string | undefined, @Body() corpo: unknown) {
     const segredo = process.env.WHATSAPP_APP_SECRET;
     if (!segredo) throw new ServiceUnavailableException('WhatsApp não configurado');
-    if (!assinaturaValida(req.rawBody, assinatura, segredo)) throw new ForbiddenException('Assinatura inválida');
+    if (!assinaturaValida(req.rawBody, assinatura, segredo)) {
+      this.logger.warn(`Webhook recusado: assinatura ${assinatura ? 'não confere (confira WHATSAPP_APP_SECRET)' : 'ausente'}`);
+      throw new ForbiddenException('Assinatura inválida');
+    }
 
-    for (const m of extrairMensagens(corpo)) {
+    const mensagens = extrairMensagens(corpo);
+    this.logger.log(`Webhook recebido: ${mensagens.length} mensagem(ns) de usuário`);
+    for (const m of mensagens) {
       this.service.processar(m).catch((e) => this.logger.error(`Erro no processamento: ${(e as Error).message}`));
     }
     return { ok: true };
