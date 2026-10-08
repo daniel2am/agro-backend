@@ -25,6 +25,8 @@ export const RECURSOS = [
   'relatorio_pdf', // relatório em PDF (banco/contador)
   'equipe', // vários usuários por fazenda, com papéis
   'importar_mapas', // importar invernadas de KML/GeoJSON/Shapefile
+  'custo_arroba', // custo da arroba, ponto de equilíbrio e resultado da pecuária
+  'alertas_inteligentes', // central de alertas (pesagem atrasada, perda de peso, lotação…)
 ] as const;
 export type Recurso = (typeof RECURSOS)[number];
 
@@ -57,6 +59,8 @@ const INTERMEDIARIO: Recurso[] = [
   'alertas_vacina',
   'ganho_peso',
   'modo_offline',
+  'custo_arroba',
+  'alertas_inteligentes',
 ];
 
 export const DEFINICOES: Record<PlanoTipo, DefinicaoPlano> = {

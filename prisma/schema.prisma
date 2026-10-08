@@ -97,6 +97,7 @@ model Fazenda {
   pesagens     Pesagem[]
   ocorrencias  Ocorrencia[]
   compras      CompraInsumo[]
+  chuvas       Chuva[]
 
   @@index([id, criadoEm])
 }
@@ -445,6 +446,22 @@ model Pesagem {
   fazenda Fazenda @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
 
   @@index([animalId, data])
+  @@index([fazendaId, data])
+}
+
+// Pluviômetro: um registro por fazenda por dia (reenviar o mesmo dia substitui o valor,
+// o que também torna seguro repetir um envio feito offline).
+model Chuva {
+  id         String   @id @default(uuid())
+  fazendaId  String
+  data       DateTime @db.Date
+  mm         Float
+  observacao String?
+  criadoEm   DateTime @default(now())
+
+  fazenda Fazenda @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
+
+  @@unique([fazendaId, data])
   @@index([fazendaId, data])
 }
 

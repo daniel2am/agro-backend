@@ -29,6 +29,9 @@ import { ProcedimentoLavouraModule } from './modules/procedimento-lavoura/proced
 import { PlanoModule } from './modules/plano/plano.module';
 import { EquipeModule } from './modules/equipe/equipe.module';
 import { RelatorioModule } from './modules/relatorio/relatorio.module';
+import { PecuariaModule } from './modules/pecuaria/pecuaria.module';
+import { AlertasModule } from './modules/alertas/alertas.module';
+import { ChuvaModule } from './modules/chuva/chuva.module';
 import { HealthController } from './health/health.controller';
 import { LegalController } from './legal/legal.controller';
 
@@ -42,6 +45,9 @@ import { LegalController } from './legal/legal.controller';
     PlanoModule,
     EquipeModule,
     RelatorioModule,
+    ChuvaModule,
+    PecuariaModule,
+    AlertasModule,
     NotificacaoModule,
     RebanhoModule,
     ProcedimentoLavouraModule,
