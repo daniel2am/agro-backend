@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
-import { FinanceiroService } from './financeiro.service';
+import { FinanceiroService, lerDataLancamento } from './financeiro.service';
+import { ddmmaaaa } from '../lcdpr/lcdpr.gerador';
 
 // Campos fiscais do lançamento (LCDPR): conta, documento e CPF/CNPJ de quem pagou/recebeu.
 describe('FinanceiroService — dados fiscais', () => {
@@ -72,6 +73,23 @@ describe('FinanceiroService — dados fiscais', () => {
       await expect(service.update('n1', { contraparteDoc: '11.222.333/0001-81', documentoTipo: 1 } as any, 'u1')).resolves.toBeDefined();
       await expect(service.update('n1', { valor: 5 } as any, 'u1')).rejects.toBeInstanceOf(BadRequestException);
       await expect(service.update('n1', { contraparteDoc: '11.222.333/0001-81', descricao: 'x' } as any, 'u1')).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  describe('data do lançamento', () => {
+    it('"AAAA-MM-DD" cai no mesmo dia em Brasília (meia-noite UTC cairia no dia anterior)', () => {
+      expect(ddmmaaaa(lerDataLancamento('2026-03-10'))).toBe('10032026');
+      expect(ddmmaaaa(new Date('2026-03-10'))).toBe('09032026'); // o problema que isto evita
+    });
+    it('ISO completo é respeitado como veio', () => {
+      expect(lerDataLancamento('2026-03-10T03:00:00.000Z').toISOString()).toBe('2026-03-10T03:00:00.000Z');
+    });
+    it('lixo continua inválido', () => {
+      expect(Number.isNaN(lerDataLancamento('ontem').getTime())).toBe(true);
+    });
+    it('create grava meio-dia para data sem horário', async () => {
+      await service.create(dto({ data: '2026-03-10' }) as any, 'u1');
+      expect(prisma.financeiro.create.mock.calls[0][0].data.data.toISOString()).toBe('2026-03-10T12:00:00.000Z');
     });
   });
 });

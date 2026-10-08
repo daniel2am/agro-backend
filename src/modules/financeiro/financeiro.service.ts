@@ -15,6 +15,15 @@ import { apenasDigitos, cpfOuCnpjValido } from 'src/common/utils/documentos';
 // Campos fiscais (LCDPR): podem ser editados até em lançamentos espelho de compra de insumo
 const CAMPOS_FISCAIS = ['contaBancariaId', 'documentoTipo', 'documentoNumero', 'contraparteDoc', 'contraparteNome'] as const;
 
+/**
+ * Data do lançamento. "AAAA-MM-DD" (sem horário) vira meio-dia UTC: à meia-noite UTC
+ * o dia ainda seria o anterior no Brasil (UTC−3/−4) e o lançamento cairia no dia errado.
+ * Datas com horário (ISO completo) são respeitadas como vieram.
+ */
+export function lerDataLancamento(valor: string): Date {
+  return /^\d{4}-\d{2}-\d{2}$/.test(valor) ? new Date(`${valor}T12:00:00.000Z`) : new Date(valor);
+}
+
 @Injectable()
 export class FinanceiroService {
   constructor(private readonly prisma: PrismaService) {}
@@ -84,7 +93,7 @@ export class FinanceiroService {
     await this.assertAcessoFazenda(dto.fazendaId, usuarioId);
 
     if (!dto.data) throw new BadRequestException('Data é obrigatória');
-    const dataLanc = new Date(dto.data);
+    const dataLanc = lerDataLancamento(dto.data);
     if (Number.isNaN(dataLanc.getTime())) throw new BadRequestException('Data inválida');
 
     if (dto.animalId && dto.lavouraId) {
@@ -296,7 +305,7 @@ export class FinanceiroService {
       ...(dto.custoLavouraId !== undefined ? { custoLavouraId: dto.custoLavouraId ?? null } : {}),
     };
     if (dto.data !== undefined) {
-      const d = new Date(dto.data);
+      const d = lerDataLancamento(dto.data);
       if (Number.isNaN(d.getTime())) throw new BadRequestException('Data inválida');
       dataUpdate.data = d;
     }
