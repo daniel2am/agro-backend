@@ -309,6 +309,9 @@ model Usuario {
   compras          CompraInsumo[]
   contribuinte     ContribuinteRural?
   contasBancarias  ContaBancaria[]
+  whatsapp         WhatsappVinculo?
+  whatsappCodigos  WhatsappCodigo[]
+  whatsappPendentes WhatsappPendente[]
 
   @@index([status])
 }
@@ -484,6 +487,58 @@ model NdviMedicao {
 
   @@unique([alvoTipo, alvoId, inicio])
   @@index([fazendaId, alvoTipo, alvoId, inicio])
+}
+
+// ------------------------------------------------------------------ WhatsApp
+// Número de WhatsApp vinculado a um usuário. `telefone` guarda a chave normalizada
+// (celular brasileiro sempre sem o 9 extra) para casar as duas formas que a Meta entrega.
+model WhatsappVinculo {
+  id               String   @id @default(uuid())
+  usuarioId        String   @unique
+  telefone         String   @unique
+  telefoneExibicao String
+  fazendaPadraoId  String?
+  criadoEm         DateTime @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+}
+
+// Código de 6 dígitos que o produtor manda do WhatsApp para vincular o número (vale 15 min).
+model WhatsappCodigo {
+  id        String   @id @default(uuid())
+  usuarioId String
+  codigo    String   @unique
+  expiraEm  DateTime
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+}
+
+// Registro interpretado que aguarda o "Confirmar" do produtor. Nada é gravado antes disso.
+model WhatsappPendente {
+  id        String   @id @default(uuid())
+  usuarioId String
+  telefone  String
+  fazendaId String
+  comando   Json
+  resumo    String
+  criadoEm  DateTime @default(now())
+  expiraEm  DateTime
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([telefone, criadoEm])
+}
+
+// Ids de mensagem já processados: a Meta reenvia o webhook quando demoramos a responder.
+model WhatsappMensagem {
+  id         String   @id
+  telefone   String
+  recebidoEm DateTime @default(now())
+
+  @@index([telefone, recebidoEm])
+  @@index([recebidoEm])
 }
 
 // ---------------------------------------------------------------- LCDPR

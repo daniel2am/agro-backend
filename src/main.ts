@@ -11,7 +11,8 @@ import { ErrosFilter } from './common/monitoring/erros.filter';
 iniciarSentry();
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // rawBody: o webhook do WhatsApp assina os bytes exatos do corpo (HMAC) e precisa deles intactos
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   // CORS (Render + domínio + localhost/Expo)
   app.enableCors({

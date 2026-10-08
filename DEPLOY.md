@@ -64,3 +64,39 @@ npx prisma migrate deploy
 - `DELETE /usuarios/me` (corpo `{ "senha": "..." }`; contas Google/Apple dispensam a senha) apaga a
   conta. Fazendas em que a pessoa era a única são apagadas; em fazendas com equipe, o integrante mais
   antigo (gestor antes de colaborador) vira administrador e herda os registros criados por ela.
+
+## Recursos novos: satélite, LCDPR, WhatsApp
+
+### Satélite (NDVI) — `satelite`, plano Pro
+Imagens Sentinel-2 via Sentinel Hub no Copernicus Data Space (cota gratuita mensal; uso comercial em
+escala exige plano pago). Sem as variáveis abaixo, a tela mostra "função em ativação" e nada quebra.
+1. Crie uma conta gratuita em dataspace.copernicus.eu.
+2. Em shapps.dataspace.copernicus.eu → Configurações do usuário → *OAuth clients* → Create.
+3. No Render: `CDSE_CLIENT_ID` e `CDSE_CLIENT_SECRET`.
+O servidor só consulta o provedor quando há imagem nova (no máximo a cada 12 h por área) e guarda
+o resultado em `NdviMedicao`.
+
+### LCDPR — `lcdpr`, plano Pro
+Sem variáveis. O arquivo segue o leiaute 1.3 da Receita (Ato Declaratório Copes nº 1/2020) e **não é
+assinado**: a assinatura digital (ICP-Brasil) e a entrega são do contribuinte/contador. Confirme em
+gov.br/receitafederal se há um leiaute mais novo antes de entregar. Valide o arquivo no programa da
+Receita antes do envio.
+
+### WhatsApp — `whatsapp`, plano Produtor
+Lançamento de despesa/receita/chuva/pesagem por texto ou áudio, sempre com confirmação por botão.
+1. Meta for Developers → crie um app "Business" → adicione o produto **WhatsApp** → número comercial.
+2. Webhook: URL `https://<seu-backend>/whatsapp/webhook`, token de verificação = `WHATSAPP_VERIFY_TOKEN`
+   (invente um), campo assinado `messages`.
+3. No Render:
+   - `WHATSAPP_TOKEN` — token permanente (usuário do sistema)
+   - `WHATSAPP_PHONE_ID` — id do número comercial
+   - `WHATSAPP_APP_SECRET` — "chave secreta do app" (**obrigatória**: sem ela o webhook recusa tudo)
+   - `WHATSAPP_VERIFY_TOKEN` — o mesmo do passo 2
+   - `WHATSAPP_NUMERO_EXIBICAO` — o número comercial com DDI (ex.: 5567999990000), para o link "Abrir no WhatsApp"
+   - opcional `WHATSAPP_API_VERSION` (padrão v21.0)
+4. Opcionais (o recurso funciona sem eles, só com frases padronizadas):
+   - `ANTHROPIC_API_KEY` (+ `WHATSAPP_LLM_MODEL`) — entende frases livres
+   - `OPENAI_API_KEY` (+ `WHATSAPP_STT_MODEL`) — transcreve áudios
+As respostas do AgroTotal são sempre a uma mensagem do produtor (nunca iniciamos conversa), mas confira a
+tabela de preços vigente da Meta para o seu país. Aprovação do app e verificação da empresa na Meta
+podem levar dias.

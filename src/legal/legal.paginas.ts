@@ -54,6 +54,7 @@ ${contato(e)}
 <li><b>Conta:</b> nome, e-mail e senha (guardada apenas em forma criptografada irreversível). Se você entrar com Google ou Apple, recebemos o identificador da conta e o e-mail que esses serviços autorizarem.</li>
 <li><b>Dados da propriedade e da operação:</b> fazendas (nome, município, CAR, INCRA, área), invernadas e lavouras (inclusive desenhos de perímetro), animais e pesagens, vacinas e manejos, lançamentos financeiros e compras de insumo. Você os informa, e eles são seus.</li>
 <li><b>Equipe:</b> e-mail e papel das pessoas que você convida para a propriedade.</li>
+<li><b>Dados fiscais (opcional):</b> se você usar o LCDPR, guardamos CPF, endereço, dados do imóvel rural, contas bancárias e CPF/CNPJ das pessoas com quem você negocia, apenas para gerar o seu livro caixa. Eles não são compartilhados com terceiros e são apagados com a conta.</li>
 <li><b>Localização:</b> usada apenas quando você pede para buscar o CAR pela sua posição, ver o clima do local ou enquadrar o mapa. A permissão é opcional e pode ser revogada nos Ajustes do aparelho.</li>
 <li><b>Registros de uso e técnicos:</b> data de acesso, endereço IP e tipo de aparelho, para segurança e diagnóstico; e relatórios de erro (sem seus dados de produção) para corrigirmos falhas.</li>
 </ul>
@@ -74,6 +75,8 @@ ${contato(e)}
 <li><b>Serviços públicos consultados pelo app:</b> SICAR (busca do CAR), IBGE (municípios) e Open-Meteo (previsão do tempo). Para o CAR e o clima, a consulta envia a coordenada ou o número do CAR, sem identificar você.</li>
 <li><b>Google e Apple:</b> apenas quando você escolhe entrar com eles.</li>
 <li><b>Monitoramento de erros:</b> relatórios técnicos, sem dados pessoais de uso.</li>
+<li><b>WhatsApp (opcional):</b> se você vincular seu número para lançar registros por mensagem, o conteúdo das mensagens e áudios que você enviar passa pela plataforma WhatsApp (Meta) e, para entender frases livres e transcrever áudios, por provedores de inteligência artificial contratados por nós. Usamos o conteúdo apenas para interpretar o pedido e registrar o que você confirmar; você pode desvincular o número a qualquer momento no aplicativo.</li>
+<li><b>Imagens de satélite:</b> para o monitoramento de pasto e lavoura, o contorno das suas áreas é enviado ao serviço público de imagens Copernicus/Sentinel para calcular o índice de vegetação. Não enviamos seu nome nem outros dados pessoais.</li>
 <li><b>Sua equipe:</b> as pessoas que você convida veem os dados da propriedade de acordo com o papel (administrador, gestor ou colaborador). Colaboradores não veem o financeiro.</li>
 <li><b>Autoridades:</b> quando houver obrigação legal.</li>
 </ul>

@@ -29,6 +29,7 @@ export const RECURSOS = [
   'alertas_inteligentes', // central de alertas (pesagem atrasada, perda de peso, lotação…)
   'lcdpr', // livro caixa digital do produtor rural (arquivo para a Receita)
   'satelite', // saúde do pasto e da lavoura por imagem de satélite (NDVI)
+  'whatsapp', // lançar despesas, receitas, chuva e pesagens por mensagem ou áudio
 ] as const;
 export type Recurso = (typeof RECURSOS)[number];
 
@@ -63,6 +64,7 @@ const INTERMEDIARIO: Recurso[] = [
   'modo_offline',
   'custo_arroba',
   'alertas_inteligentes',
+  'whatsapp',
 ];
 
 export const DEFINICOES: Record<PlanoTipo, DefinicaoPlano> = {
