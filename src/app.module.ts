@@ -32,6 +32,7 @@ import { RelatorioModule } from './modules/relatorio/relatorio.module';
 import { PecuariaModule } from './modules/pecuaria/pecuaria.module';
 import { AlertasModule } from './modules/alertas/alertas.module';
 import { FiscalModule } from './modules/fiscal/fiscal.module';
+import { SateliteModule } from './modules/satelite/satelite.module';
 import { LcdprModule } from './modules/lcdpr/lcdpr.module';
 import { ChuvaModule } from './modules/chuva/chuva.module';
 import { HealthController } from './health/health.controller';
@@ -52,6 +53,7 @@ import { LegalController } from './legal/legal.controller';
     AlertasModule,
     FiscalModule,
     LcdprModule,
+    SateliteModule,
     NotificacaoModule,
     RebanhoModule,
     ProcedimentoLavouraModule,

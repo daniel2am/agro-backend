@@ -99,6 +99,7 @@ model Fazenda {
   compras      CompraInsumo[]
   chuvas       Chuva[]
   imovelRural  ImovelRural?
+  ndvi         NdviMedicao[]
 
   @@index([id, criadoEm])
 }
@@ -200,6 +201,7 @@ model Lavoura {
   areaHa        Float
   dataPlantio   DateTime
   semente       String?
+  poligono      Json? // perímetro [{latitude, longitude}] para o monitoramento por satélite
   status        StatusLavoura         @default(ativo)
   fazendaId     String
   criadoEm      DateTime              @default(now())
@@ -459,6 +461,29 @@ model Pesagem {
 
   @@index([animalId, data])
   @@index([fazendaId, data])
+}
+
+// Índice de vegetação (NDVI, satélite Sentinel-2) por intervalo de 10 dias de uma
+// invernada ou lavoura. Guardado para não gastar a cota do provedor a cada abertura:
+// uma linha por (alvo, início do intervalo), na grade fixa de 10 dias.
+model NdviMedicao {
+  id            String   @id @default(uuid())
+  fazendaId     String
+  alvoTipo      String // 'invernada' | 'lavoura'
+  alvoId        String
+  inicio        DateTime @db.Date
+  fim           DateTime @db.Date
+  media         Float? // null = sem pixel válido (nuvem) no intervalo
+  minimo        Float?
+  maximo        Float?
+  desvio        Float?
+  cobertura     Float // 0 a 1: fração de pixels úteis (sem nuvem, sombra ou água)
+  atualizadoEm  DateTime @default(now()) @updatedAt
+
+  fazenda Fazenda @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
+
+  @@unique([alvoTipo, alvoId, inicio])
+  @@index([fazendaId, alvoTipo, alvoId, inicio])
 }
 
 // ---------------------------------------------------------------- LCDPR

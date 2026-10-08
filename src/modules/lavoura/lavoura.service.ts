@@ -35,8 +35,13 @@ export class LavouraService {
     await this.assertAcessoFazenda(data.fazendaId, usuarioId);
     await this.planos.assertLimiteDaFazenda(data.fazendaId, 'areas');
 
+    const { poligono, ...resto } = data;
     const lavoura = await this.prisma.lavoura.create({
-      data: { ...data, dataPlantio: new Date(data.dataPlantio) },
+      data: {
+        ...resto,
+        dataPlantio: new Date(data.dataPlantio),
+        ...(poligono ? { poligono: poligono.map(({ latitude, longitude }) => ({ latitude, longitude })) } : {}),
+      },
     });
 
     // log para histórico (padrão key=value que já usamos)
@@ -138,6 +143,10 @@ export class LavouraService {
         ...(data.areaHa !== undefined ? { areaHa: data.areaHa } : {}),
         ...(data.cultura !== undefined ? { cultura: data.cultura } : {}),
         ...(data.semente !== undefined ? { semente: data.semente } : {}),
+        // perímetro para o satélite; a classe de validação vira objeto simples antes de ir ao JSON
+        ...(data.poligono !== undefined
+          ? { poligono: data.poligono.map(({ latitude, longitude }) => ({ latitude, longitude })) }
+          : {}),
       },
     });
 

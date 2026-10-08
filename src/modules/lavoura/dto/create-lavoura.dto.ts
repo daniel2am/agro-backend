@@ -1,4 +1,6 @@
-import { IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { ArrayMinSize, IsArray, IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+import { CoordenadaDto } from '../../invernada/dto/create-invernada.dto';
 import { StatusLavoura } from '@prisma/client';
 
 export class CreateLavouraDto {
@@ -22,6 +24,14 @@ export class CreateLavouraDto {
   @IsOptional()
   @IsString()
   semente?: string;
+
+  // perímetro opcional (>= 3 pontos); habilita o monitoramento por satélite
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CoordenadaDto)
+  @ArrayMinSize(3)
+  poligono?: CoordenadaDto[];
 
   @IsEnum(StatusLavoura)
   @IsOptional()

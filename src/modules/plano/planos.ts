@@ -28,6 +28,7 @@ export const RECURSOS = [
   'custo_arroba', // custo da arroba, ponto de equilíbrio e resultado da pecuária
   'alertas_inteligentes', // central de alertas (pesagem atrasada, perda de peso, lotação…)
   'lcdpr', // livro caixa digital do produtor rural (arquivo para a Receita)
+  'satelite', // saúde do pasto e da lavoura por imagem de satélite (NDVI)
 ] as const;
 export type Recurso = (typeof RECURSOS)[number];
 
@@ -87,7 +88,7 @@ export const DEFINICOES: Record<PlanoTipo, DefinicaoPlano> = {
     resumo: 'Operação grande ou várias propriedades: sem limites práticos, com equipe e relatórios.',
     precoMensal: null,
     limites: { fazendas: SEM_LIMITE, areas: SEM_LIMITE, animais: SEM_LIMITE, membros: SEM_LIMITE },
-    recursos: [...INTERMEDIARIO, 'suplementacao', 'pragas', 'relatorio_pdf', 'equipe', 'importar_mapas', 'lcdpr'],
+    recursos: [...INTERMEDIARIO, 'suplementacao', 'pragas', 'relatorio_pdf', 'equipe', 'importar_mapas', 'lcdpr', 'satelite'],
   },
 };
 
