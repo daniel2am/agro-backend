@@ -5,6 +5,19 @@ import { PAPEIS_FINANCEIRO } from '../equipe/equipe.service';
 import { lerPeriodo } from '../relatorio/relatorio.service';
 import { RENDIMENTO_PADRAO_PCT, ResultadoPecuaria, calcularResultadoPecuaria } from './pecuaria.resultado';
 
+/**
+ * "AAAA-MM-DD" vira o dia inteiro no horário de Brasília (UTC−3): o início às 00:00 e o fim
+ * às 23:59:59.999. Sem isso, "até hoje" cortava à meia-noite UTC e deixava de fora o que foi
+ * lançado hoje. Datas com horário (ISO completo) passam como vieram.
+ */
+export function limitesDoDia(inicio?: string, fim?: string): { inicio?: string; fim?: string } {
+  const so = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+  return {
+    ...(inicio !== undefined ? { inicio: so(inicio) ? `${inicio}T00:00:00.000-03:00` : inicio } : {}),
+    ...(fim !== undefined ? { fim: so(fim) ? `${fim}T23:59:59.999-03:00` : fim } : {}),
+  };
+}
+
 export interface OpcoesResultado {
   inicio?: string;
   fim?: string;
@@ -33,7 +46,8 @@ export class PecuariaService {
       throw new BadRequestException('O rateio deve ficar entre 0% e 100%');
     }
 
-    const p = lerPeriodo(op.inicio, op.fim);
+    const lim = limitesDoDia(op.inicio, op.fim);
+    const p = lerPeriodo(lim.inicio, lim.fim);
     const fim = p.fim ?? new Date();
     const inicio = p.inicio ?? new Date(fim.getFullYear() - 1, fim.getMonth(), fim.getDate());
     const faixa = { gte: inicio, lte: fim };

@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
-import { PecuariaService } from './pecuaria.service';
+import { PecuariaService, limitesDoDia } from './pecuaria.service';
 
 describe('PecuariaService', () => {
   let prisma: any;
@@ -76,5 +76,23 @@ describe('PecuariaService', () => {
     expect(r.vendas.cabecas).toBe(2);
     expect(r.vendas.cabecasComPeso).toBe(1); // 'b' não tem peso nenhum
     expect(r.vendas.arrobasVendidas).toBe(18.72); // 540 kg, não 400 nem 999
+  });
+
+  describe('período em dias (horário de Brasília)', () => {
+    it('data sem horário cobre o dia inteiro: início 00:00 e fim 23:59:59 em Brasília', () => {
+      const l = limitesDoDia('2026-10-08', '2026-10-08');
+      expect(new Date(l.inicio!).toISOString()).toBe('2026-10-08T03:00:00.000Z');
+      expect(new Date(l.fim!).toISOString()).toBe('2026-10-09T02:59:59.999Z');
+    });
+    it('ISO completo e ausência passam como vieram', () => {
+      expect(limitesDoDia('2026-10-08T10:00:00Z', undefined)).toEqual({ inicio: '2026-10-08T10:00:00Z' });
+      expect(limitesDoDia()).toEqual({});
+    });
+    it('o que foi lançado às 22h (Brasília) do último dia ainda entra', async () => {
+      await service.resultado('f1', 'u1', { inicio: '2026-01-01', fim: '2026-10-08' });
+      const faixa = prisma.pesagem.findMany.mock.calls[0][0].where.data;
+      expect(faixa.lte.getTime()).toBeGreaterThan(new Date('2026-10-09T01:00:00Z').getTime()); // 22h do dia 8 em Brasília
+      expect(faixa.lte.getTime()).toBeLessThan(new Date('2026-10-09T03:00:00Z').getTime());
+    });
   });
 });
