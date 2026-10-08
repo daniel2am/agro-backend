@@ -10,6 +10,10 @@ import { CreateFinanceiroDto } from './dto/create-financeiro.dto';
 import { UpdateFinanceiroDto } from './dto/update-financeiro.dto';
 import { ehCategoriaDeDespesa, ehCategoriaDeReceita } from './categorias';
 import { PAPEIS_FINANCEIRO } from '../equipe/equipe.service';
+import { apenasDigitos, cpfOuCnpjValido } from 'src/common/utils/documentos';
+
+// Campos fiscais (LCDPR): podem ser editados até em lançamentos espelho de compra de insumo
+const CAMPOS_FISCAIS = ['contaBancariaId', 'documentoTipo', 'documentoNumero', 'contraparteDoc', 'contraparteNome'] as const;
 
 @Injectable()
 export class FinanceiroService {
@@ -44,6 +48,37 @@ export class FinanceiroService {
     }
   }
 
+  /**
+   * Valida e normaliza os campos fiscais recebidos. Devolve só o que veio no DTO
+   * (undefined = não mexer; null = limpar), já com o CPF/CNPJ só em dígitos.
+   */
+  private async dadosFiscais(dto: Partial<CreateFinanceiroDto>, fazendaId: string) {
+    const out: Record<string, unknown> = {};
+
+    if (dto.contraparteDoc !== undefined) {
+      if (dto.contraparteDoc === null || dto.contraparteDoc === '') out.contraparteDoc = null;
+      else if (!cpfOuCnpjValido(dto.contraparteDoc)) throw new BadRequestException('CPF/CNPJ do participante inválido');
+      else out.contraparteDoc = apenasDigitos(dto.contraparteDoc);
+    }
+    if (dto.documentoTipo !== undefined) out.documentoTipo = dto.documentoTipo ?? null;
+    if (dto.documentoNumero !== undefined) out.documentoNumero = dto.documentoNumero?.trim() || null;
+    if (dto.contraparteNome !== undefined) out.contraparteNome = dto.contraparteNome?.trim() || null;
+
+    if (dto.contaBancariaId !== undefined) {
+      if (dto.contaBancariaId === null) out.contaBancariaId = null;
+      else {
+        // a conta tem que ser de alguém que administra esta fazenda
+        const conta = await this.prisma.contaBancaria.findFirst({
+          where: { id: dto.contaBancariaId, usuario: { fazendas: { some: { fazendaId, papel: 'administrador' } } } },
+          select: { id: true },
+        });
+        if (!conta) throw new ForbiddenException('Conta bancária não encontrada para esta fazenda');
+        out.contaBancariaId = conta.id;
+      }
+    }
+    return out;
+  }
+
   // ===== CRUD =====
   async create(dto: CreateFinanceiroDto, usuarioId: string) {
     await this.assertAcessoFazenda(dto.fazendaId, usuarioId);
@@ -68,6 +103,7 @@ export class FinanceiroService {
     // vendas ganham a categoria automaticamente quando o usuário não escolhe
     const categoria = dto.categoria ?? (dto.animalId ? 'venda_gado' : dto.lavouraId ? 'venda_lavoura' : undefined);
     this.assertCategoriaCompativel(dto.tipo, categoria);
+    const fiscal = await this.dadosFiscais(dto, dto.fazendaId);
 
     const registro = await this.prisma.$transaction(async (tx) => {
       // ===== Despesa alocada em lavoura: a lavoura tem que ser desta fazenda =====
@@ -134,6 +170,7 @@ export class FinanceiroService {
           areaVendidaHa: dto.lavouraId ? dto.areaVendidaHa : null,
           categoria: categoria ?? null,
           custoLavouraId: dto.custoLavouraId ?? null,
+          ...fiscal,
         },
       });
     });
@@ -219,10 +256,16 @@ export class FinanceiroService {
     // Este lançamento é o espelho de uma CompraInsumo. Editar o valor aqui
     // deixaria os dois registros divergentes — a edição tem que passar pela
     // compra (PATCH /compra-insumo/:id), que atualiza os dois na mesma transação.
+    // Os dados fiscais (conta, documento, CPF/CNPJ) não afetam o valor: podem.
     if (exists.compraInsumoId) {
-      throw new BadRequestException(
-        'Lançamento vinculado a uma compra de insumo. Edite pela compra para manter os valores consistentes.',
+      const mexeEmOutros = Object.entries(dto).some(
+        ([k, v]) => v !== undefined && k !== 'fazendaId' && !(CAMPOS_FISCAIS as readonly string[]).includes(k),
       );
+      if (mexeEmOutros) {
+        throw new BadRequestException(
+          'Lançamento vinculado a uma compra de insumo. Edite pela compra para manter os valores consistentes.',
+        );
+      }
     }
 
     // Alterar o vínculo de venda (animal/lavoura) depois de criado não é suportado:
@@ -241,7 +284,10 @@ export class FinanceiroService {
       if (!alvo) throw new ForbiddenException('Lavoura não pertence a esta fazenda');
     }
 
+    const fiscal = await this.dadosFiscais(dto, exists.fazendaId);
+
     const dataUpdate: any = {
+      ...fiscal,
       ...(dto.descricao !== undefined ? { descricao: dto.descricao } : {}),
       ...(dto.valor !== undefined ? { valor: dto.valor } : {}),
       ...(dto.tipo !== undefined ? { tipo: dto.tipo } : {}),

@@ -98,6 +98,7 @@ model Fazenda {
   ocorrencias  Ocorrencia[]
   compras      CompraInsumo[]
   chuvas       Chuva[]
+  imovelRural  ImovelRural?
 
   @@index([id, criadoEm])
 }
@@ -304,6 +305,8 @@ model Usuario {
   dispositivos     Dispositivo[]
   leituras         LeituraDispositivo[]
   compras          CompraInsumo[]
+  contribuinte     ContribuinteRural?
+  contasBancarias  ContaBancaria[]
 
   @@index([status])
 }
@@ -380,10 +383,19 @@ model Financeiro {
   custoLavouraId String?
   custoLavoura   Lavoura? @relation("CustoDaLavoura", fields: [custoLavouraId], references: [id], onDelete: SetNull)
 
+  // Dados exigidos pelo LCDPR (livro caixa digital do produtor rural). Opcionais.
+  contaBancariaId String?
+  contaBancaria   ContaBancaria? @relation(fields: [contaBancariaId], references: [id], onDelete: SetNull)
+  documentoTipo   Int? // 1 NF, 2 fatura, 3 recibo, 4 contrato, 5 folha, 6 outros
+  documentoNumero String?
+  contraparteDoc  String? // CPF/CNPJ de quem pagou/recebeu (só dígitos)
+  contraparteNome String?
+
   fazenda Fazenda @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
 
   @@index([fazendaId, data])
   @@index([custoLavouraId])
+  @@index([contaBancariaId])
   @@index([animalId])
   @@index([lavouraId])
   @@index([tipo])
@@ -447,6 +459,82 @@ model Pesagem {
 
   @@index([animalId, data])
   @@index([fazendaId, data])
+}
+
+// ---------------------------------------------------------------- LCDPR
+// Perfil fiscal do produtor (pessoa física que entrega o LCDPR). Um por usuário.
+model ContribuinteRural {
+  id            String   @id @default(uuid())
+  usuarioId     String   @unique
+  cpf           String
+  nome          String
+  endereco      String
+  numero        String
+  complemento   String?
+  bairro        String
+  uf            String
+  codMunicipio  String // código IBGE de 7 dígitos
+  cep           String
+  telefone      String?
+  email         String
+  contadorNome  String?
+  contadorDoc   String?
+  contadorCrc   String?
+  contadorEmail String?
+  contadorFone  String?
+  atualizadoEm  DateTime @updatedAt
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+}
+
+// Dados fiscais de uma fazenda como imóvel rural (registro 0040 do LCDPR).
+model ImovelRural {
+  id                String   @id @default(uuid())
+  fazendaId         String   @unique
+  codItr            String? // CAFIR/NIRF, 8 dígitos
+  caepf             String? // 14 dígitos
+  inscricaoEstadual String?
+  endereco          String
+  numero            String?
+  complemento       String?
+  bairro            String
+  cep               String
+  codMunicipio      String
+  tipoExploracao    Int      @default(1) // 1 individual, 2 condomínio, 3 arrendado, 4 parceria, 5 comodato, 6 outros
+  participacaoPct   Float    @default(100)
+  atualizadoEm      DateTime @updatedAt
+
+  fazenda      Fazenda             @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
+  contrapartes ContraparteImovel[]
+}
+
+// Condôminos, arrendadores, parceiros… (registro 0045).
+model ContraparteImovel {
+  id         String @id @default(uuid())
+  imovelId   String
+  tipo       Int // 1 condômino, 2 arrendador, 3 parceiro, 4 comodante, 5 outro
+  documento  String
+  nome       String
+  percentual Float
+
+  imovel ImovelRural @relation(fields: [imovelId], references: [id], onDelete: Cascade)
+
+  @@index([imovelId])
+}
+
+model ContaBancaria {
+  id          String   @id @default(uuid())
+  usuarioId   String
+  banco       String // código de compensação, 3 dígitos
+  nomeBanco   String
+  agencia     String // 4 dígitos, sem DV
+  numeroConta String // com DV, só dígitos
+  criadoEm    DateTime @default(now())
+
+  usuario     Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  lancamentos Financeiro[]
+
+  @@index([usuarioId])
 }
 
 // Pluviômetro: um registro por fazenda por dia (reenviar o mesmo dia substitui o valor,
