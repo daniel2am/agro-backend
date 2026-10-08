@@ -34,6 +34,7 @@ import { AlertasModule } from './modules/alertas/alertas.module';
 import { FiscalModule } from './modules/fiscal/fiscal.module';
 import { SateliteModule } from './modules/satelite/satelite.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
+import { ParceiroModule } from './modules/parceiro/parceiro.module';
 import { LcdprModule } from './modules/lcdpr/lcdpr.module';
 import { ChuvaModule } from './modules/chuva/chuva.module';
 import { HealthController } from './health/health.controller';
@@ -56,6 +57,7 @@ import { LegalController } from './legal/legal.controller';
     LcdprModule,
     SateliteModule,
     WhatsappModule,
+    ParceiroModule,
     NotificacaoModule,
     RebanhoModule,
     ProcedimentoLavouraModule,

@@ -24,4 +24,11 @@ describe('páginas legais', () => {
   it('termos avisam que o conteúdo agronômico/veterinário é apoio', () => {
     expect(paginaTermos()).toMatch(/engenheiro agrônomo/);
   });
+
+  it('privacidade explica o compartilhamento com parceiros e o que nunca é compartilhado', () => {
+    const h = paginaPrivacidade();
+    expect(h).toContain('Parceiros');
+    expect(h).toMatch(/Nunca compartilhamos dados financeiros/);
+    expect(h).toContain('revogar');
+  });
 });

@@ -77,6 +77,7 @@ ${contato(e)}
 <li><b>Monitoramento de erros:</b> relatórios técnicos, sem dados pessoais de uso.</li>
 <li><b>WhatsApp (opcional):</b> se você vincular seu número para lançar registros por mensagem, o conteúdo das mensagens e áudios que você enviar passa pela plataforma WhatsApp (Meta) e, para entender frases livres e transcrever áudios, por provedores de inteligência artificial contratados por nós. Usamos o conteúdo apenas para interpretar o pedido e registrar o que você confirmar; você pode desvincular o número a qualquer momento no aplicativo.</li>
 <li><b>Imagens de satélite:</b> para o monitoramento de pasto e lavoura, o contorno das suas áreas é enviado ao serviço público de imagens Copernicus/Sentinel para calcular o índice de vegetação. Não enviamos seu nome nem outros dados pessoais.</li>
+<li><b>Parceiros (opcional):</b> se você aceitar o convite de uma associação, empresa de nutrição ou de insumos, ela passa a ver apenas os dados que você marcar na hora de aceitar (por exemplo, número de animais, ganho de peso médio, área, município ou contato). Nunca compartilhamos dados financeiros, CPF, contas bancárias ou lançamentos com parceiros. Você pode revogar o compartilhamento a qualquer momento em Mais → Parceiros, e o parceiro deixa de ver seus dados na hora.</li>
 <li><b>Sua equipe:</b> as pessoas que você convida veem os dados da propriedade de acordo com o papel (administrador, gestor ou colaborador). Colaboradores não veem o financeiro.</li>
 <li><b>Autoridades:</b> quando houver obrigação legal.</li>
 </ul>

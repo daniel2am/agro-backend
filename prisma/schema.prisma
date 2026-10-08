@@ -100,6 +100,7 @@ model Fazenda {
   chuvas       Chuva[]
   imovelRural  ImovelRural?
   ndvi         NdviMedicao[]
+  vinculosParceiro VinculoParceiro[]
 
   @@index([id, criadoEm])
 }
@@ -310,6 +311,8 @@ model Usuario {
   contribuinte     ContribuinteRural?
   contasBancarias  ContaBancaria[]
   whatsapp         WhatsappVinculo?
+  parceirias       ParceiroMembro[]
+  vinculosParceiro VinculoParceiro[]
   whatsappCodigos  WhatsappCodigo[]
   whatsappPendentes WhatsappPendente[]
 
@@ -487,6 +490,80 @@ model NdviMedicao {
 
   @@unique([alvoTipo, alvoId, inicio])
   @@index([fazendaId, alvoTipo, alvoId, inicio])
+}
+
+// ------------------------------------------------------------------ Parceiros
+// Associação, empresa de nutrição ou de insumos que acompanha produtores. O parceiro só
+// vê o que o produtor autorizar (escopos) e nunca financeiro nem CPF.
+model Parceiro {
+  id        String   @id @default(uuid())
+  nome      String
+  tipo      String // associacao | nutricao | insumos
+  ativo     Boolean  @default(true)
+  criadoEm  DateTime @default(now())
+
+  membros  ParceiroMembro[]
+  convites ConviteParceiro[]
+  vinculos VinculoParceiro[]
+}
+
+model ParceiroMembro {
+  id         String   @id @default(uuid())
+  parceiroId String
+  usuarioId  String
+  papel      String   @default("representante") // admin | representante
+  criadoEm   DateTime @default(now())
+
+  parceiro Parceiro @relation(fields: [parceiroId], references: [id], onDelete: Cascade)
+  usuario  Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([parceiroId, usuarioId])
+  @@index([usuarioId])
+}
+
+// Convite com código curto. Pode patrocinar um plano por N meses para quem aceitar.
+model ConviteParceiro {
+  id           String    @id @default(uuid())
+  parceiroId   String
+  codigo       String    @unique
+  nota         String? // rótulo interno ("Feira de 2026", "Cliente João")
+  plano        PlanoTipo @default(basico) // basico = sem patrocínio
+  mesesPlano   Int       @default(0)
+  escopos      String[] // o que o parceiro PEDE para ver
+  usosMax      Int       @default(1)
+  usos         Int       @default(0)
+  validoAte    DateTime
+  ativo        Boolean   @default(true)
+  criadoPorId  String
+  criadoEm     DateTime  @default(now())
+
+  parceiro Parceiro         @relation(fields: [parceiroId], references: [id], onDelete: Cascade)
+  vinculos VinculoParceiro[]
+
+  @@index([parceiroId])
+}
+
+// Consentimento: o administrador de uma fazenda autoriza o parceiro a ver certos dados.
+model VinculoParceiro {
+  id           String    @id @default(uuid())
+  parceiroId   String
+  fazendaId    String
+  usuarioId    String // quem consentiu
+  conviteId    String?
+  escopos      String[] // o que o produtor AUTORIZOU
+  planoConcedido PlanoTipo?
+  planoAteEm   DateTime?
+  criadoEm     DateTime  @default(now())
+  revogadoEm   DateTime?
+
+  parceiro Parceiro         @relation(fields: [parceiroId], references: [id], onDelete: Cascade)
+  fazenda  Fazenda          @relation(fields: [fazendaId], references: [id], onDelete: Cascade)
+  usuario  Usuario          @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  convite  ConviteParceiro? @relation(fields: [conviteId], references: [id], onDelete: SetNull)
+
+  @@unique([parceiroId, fazendaId])
+  @@index([parceiroId, revogadoEm])
+  @@index([usuarioId])
 }
 
 // ------------------------------------------------------------------ WhatsApp
