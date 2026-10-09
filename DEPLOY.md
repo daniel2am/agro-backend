@@ -110,7 +110,9 @@ curl -X POST https://<seu-backend>/admin/parceiros \
   -H "x-admin-key: $ADMIN_API_KEY" -H "Content-Type: application/json" \
   -d '{"nome":"Nutri Campo","tipo":"nutricao","emailAdmin":"gerente@nutricampo.com"}'
 ```
-Tipos: `associacao`, `nutricao`, `insumos`. Daí em diante o parceiro gera convites pelo app (Mais →
+Tipos: `associacao`, `nutricao`, `insumos`.
+
+**Painel web:** `https://<seu-backend>/painel-parceiro`. O parceiro entra com e-mail e senha da conta AgroTotal e vê a carteira (só o que cada produtor autorizou, com exportação CSV), cria e cancela convites e, se for administrador, adiciona pessoas à equipe. É uma página única servida pelo backend, sem dependências externas. Daí em diante o parceiro gera convites pelo app (Mais →
 Parceiros) com plano patrocinado opcional. O parceiro só vê os escopos que o produtor autorizar
 (rebanho, desempenho, área, localização, contato) — nunca financeiro. O patrocínio nunca rebaixa um
 plano melhor em vigor e não é retirado se o produtor revogar o compartilhamento.
