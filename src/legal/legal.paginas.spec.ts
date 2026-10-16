@@ -31,4 +31,11 @@ describe('páginas legais', () => {
     expect(h).toMatch(/Nunca compartilhamos dados financeiros/);
     expect(h).toContain('revogar');
   });
+
+  it('privacidade descreve o uso da localização, inclusive marcar o limite andando, sem segundo plano', () => {
+    const h = paginaPrivacidade();
+    expect(h).toContain('marcar o limite da propriedade andando');
+    expect(h).toMatch(/rota percorrida não é guardada/);
+    expect(h).toMatch(/não acompanha a sua localização em segundo plano/);
+  });
 });

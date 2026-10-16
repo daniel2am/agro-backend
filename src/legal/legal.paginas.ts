@@ -19,7 +19,7 @@ export function dadosEmpresa(env: NodeJS.ProcessEnv = process.env): DadosEmpresa
   };
 }
 
-const ATUALIZADO = '8 de outubro de 2026';
+const ATUALIZADO = '16 de outubro de 2026';
 
 function moldura(titulo: string, corpo: string): string {
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
@@ -55,7 +55,7 @@ ${contato(e)}
 <li><b>Dados da propriedade e da operação:</b> fazendas (nome, município, CAR, INCRA, área), invernadas e lavouras (inclusive desenhos de perímetro), animais e pesagens, vacinas e manejos, lançamentos financeiros e compras de insumo. Você os informa, e eles são seus.</li>
 <li><b>Equipe:</b> e-mail e papel das pessoas que você convida para a propriedade.</li>
 <li><b>Dados fiscais (opcional):</b> se você usar o LCDPR, guardamos CPF, endereço, dados do imóvel rural, contas bancárias e CPF/CNPJ das pessoas com quem você negocia, apenas para gerar o seu livro caixa. Eles não são compartilhados com terceiros e são apagados com a conta.</li>
-<li><b>Localização:</b> usada apenas quando você pede para buscar o CAR pela sua posição, ver o clima do local ou enquadrar o mapa. A permissão é opcional e pode ser revogada nos Ajustes do aparelho.</li>
+<li><b>Localização:</b> usada apenas quando você pede para buscar o CAR pela sua posição, ver o clima do local, enquadrar o mapa ou marcar o limite da propriedade andando. Neste último caso, a posição do aparelho é lida enquanto a tela de marcação está aberta e só o desenho do limite que você concluir é guardado (no aparelho e na sua conta); a rota percorrida não é guardada. A permissão é opcional e pode ser revogada nos Ajustes do aparelho. O aplicativo não acompanha a sua localização em segundo plano.</li>
 <li><b>Registros de uso e técnicos:</b> data de acesso, endereço IP e tipo de aparelho, para segurança e diagnóstico; e relatórios de erro (sem seus dados de produção) para corrigirmos falhas.</li>
 </ul>
 <p>Não coletamos contatos, fotos, microfone ou câmera.</p>
