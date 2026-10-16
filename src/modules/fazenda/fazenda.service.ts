@@ -8,6 +8,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
+import { normalizarPerimetro } from './perimetro';
 import { CreateFazendaDto } from './dto/create-fazenda.dto';
 import { UpdateFazendaDto } from './dto/update-fazenda.dto';
 import { PapelUsuarioFazenda, Prisma } from '@prisma/client';
@@ -37,10 +38,14 @@ export class FazendaService {
     // plano: quantas propriedades o usuário pode administrar
     await this.planos.assertLimite(usuarioId, 'fazendas');
 
+    const { perimetro: perimetroBruto, ...dadosFazenda } = data;
+    const perimetro = normalizarPerimetro(perimetroBruto);
+
     try {
       const fazenda = await this.prisma.fazenda.create({
         data: {
-          ...data,
+          ...dadosFazenda,
+          ...(perimetro ? { perimetro: perimetro as unknown as Prisma.InputJsonValue } : {}),
           usuarios: {
             create: [
               {
@@ -50,6 +55,7 @@ export class FazendaService {
             ],
           },
         },
+        omit: { perimetro: true },
       });
 
       await this.safeLog(
@@ -102,6 +108,7 @@ export class FazendaService {
         take,
         skip,
         orderBy: { nome: 'asc' },
+        omit: { perimetro: true }, // pesado: só vem no detalhe (findOne)
       }),
       this.prisma.fazenda.count({ where }),
     ]);
@@ -133,15 +140,25 @@ export class FazendaService {
     // calcula campos alterados para log (somente os presentes no DTO)
     const alterados: string[] = [];
     for (const k of Object.keys(data) as (keyof UpdateFazendaDto)[]) {
-      if (data[k] !== undefined && (existing as any)[k] !== (data as any)[k]) {
+      if (k !== 'perimetro' && data[k] !== undefined && (existing as any)[k] !== (data as any)[k]) {
         alterados.push(String(k));
       }
     }
 
+    const { perimetro: perimetroBruto, ...dadosFazenda } = data;
+    const perimetro = normalizarPerimetro(perimetroBruto);
+    if (perimetro !== undefined) alterados.push('perimetro');
+
     try {
       const updated = await this.prisma.fazenda.update({
         where: { id },
-        data,
+        data: {
+          ...dadosFazenda,
+          ...(perimetro === undefined
+            ? {}
+            : { perimetro: perimetro === null ? Prisma.DbNull : (perimetro as unknown as Prisma.InputJsonValue) }),
+        },
+        omit: { perimetro: true },
       });
 
       await this.safeLog(

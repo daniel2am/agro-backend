@@ -82,6 +82,9 @@ model Fazenda {
   areaTotal     Float?
   status        StatusFazenda @default(ativa)
   criadoEm      DateTime      @default(now())
+  // Limite da propriedade: lista de anéis [{latitude, longitude}...] (INCRA, CAR, arquivo ou GPS).
+  // Validado em fazenda/perimetro.ts; não vem na listagem, só no detalhe.
+  perimetro     Json?
 
   usuarios     FazendaUsuario[]
   convites     ConviteFazenda[]
