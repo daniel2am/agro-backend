@@ -1,5 +1,4 @@
 import { Global, Module } from '@nestjs/common';
-import { PrismaService } from 'src/prisma.service';
 import { EquipeController } from './equipe.controller';
 import { EquipeService } from './equipe.service';
 
@@ -7,7 +6,7 @@ import { EquipeService } from './equipe.service';
 @Global()
 @Module({
   controllers: [EquipeController],
-  providers: [EquipeService, PrismaService],
+  providers: [EquipeService],
   exports: [EquipeService],
 })
 export class EquipeModule {}

@@ -2,7 +2,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { PrismaService } from './prisma.service';
 import { UsuarioModule } from './modules/usuario/usuario.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { MailerModule } from '@nestjs-modules/mailer';
@@ -39,9 +38,11 @@ import { LcdprModule } from './modules/lcdpr/lcdpr.module';
 import { ChuvaModule } from './modules/chuva/chuva.module';
 import { HealthController } from './health/health.controller';
 import { LegalController } from './legal/legal.controller';
+import { PrismaModule } from './prisma.module';
 
 @Module({
   imports: [
+    PrismaModule, // uma única instância (e um único pool de conexões) do PrismaService para o app todo
     ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }]),
 
@@ -102,6 +103,5 @@ import { LegalController } from './legal/legal.controller';
     }),
   ],
   controllers: [HealthController, LegalController],
-  providers: [PrismaService],
 })
 export class AppModule {}
